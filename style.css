@@ -94,6 +94,9 @@ html,body{
   background: #0B1220;
 }
 .leaflet-container{ background: #0B1220; }
+.dark-tiles{
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
+}
 .leaflet-control-zoom a{
   background: var(--surface) !important;
   color: var(--text) !important;
