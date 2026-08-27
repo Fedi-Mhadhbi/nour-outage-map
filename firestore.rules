@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Outage reports: anyone can read (it's a public map).
+    // A user can only create/update a report whose id starts with
+    // their own uid ("<uid>_<cell>"), so nobody can edit someone else's report.
+    match /reports/{reportId} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+                             && reportId.matches(request.auth.uid + '_.*')
+                             && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // SOS alerts: anyone can read (people nearby need to see them).
+    // Only the owner (doc id == their uid) can create/update/delete their own alert.
+    // Anyone signed in can bump helpersCount (the "I can help" tap) but nothing else on someone else's doc.
+    match /sos/{sosId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                     && sosId == request.auth.uid
+                     && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null && sosId == request.auth.uid;
+      allow update: if request.auth != null && (
+                        sosId == request.auth.uid ||
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['helpersCount'])
+                      );
+    }
+  }
+}
