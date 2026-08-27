@@ -13,7 +13,7 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDK4ZoE5brtruQ8O3EX0ZrGFZZiQM4OzQ",
+  apiKey: "AIzaSyCfNKdDoGxMJhztHRcyLcB5UG7wN7-y8Pk",
   authDomain: "nour-outage-map.firebaseapp.com",
   projectId: "nour-outage-map",
   storageBucket: "nour-outage-map.firebasestorage.app",
