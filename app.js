@@ -109,39 +109,41 @@ function serviceLabel(service) {
 // Reverse geocoding (cell -> human-readable area name), rate limited
 // ---------------------------------------------------------------
 const geocodeCache = {};
-const geocodeQueue = [];
+const pendingCallbacks = {}; // cell -> callbacks waiting on it, so repeated
+                              // re-renders never queue a duplicate request
+                              // for a cell that's already in flight.
+const geocodeQueue = [];     // queue of unique cells only
 let geocodeBusy = false;
 
 function requestReverseGeocode(cell, lat, lng, cb) {
   if (geocodeCache[cell]) { cb(geocodeCache[cell]); return; }
-  geocodeQueue.push({ cell, lat, lng, cb });
+  if (pendingCallbacks[cell]) { pendingCallbacks[cell].push(cb); return; }
+  pendingCallbacks[cell] = [cb];
+  geocodeQueue.push({ cell, lat, lng });
   processGeocodeQueue();
 }
 async function processGeocodeQueue() {
   if (geocodeBusy || geocodeQueue.length === 0) return;
   geocodeBusy = true;
   const item = geocodeQueue.shift();
-  if (geocodeCache[item.cell]) {
-    item.cb(geocodeCache[item.cell]);
-    geocodeBusy = false;
-    processGeocodeQueue();
-    return;
-  }
+  const callbacks = pendingCallbacks[item.cell] || [];
+  delete pendingCallbacks[item.cell];
+
+  let label;
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${item.lat}&lon=${item.lng}&zoom=15&addressdetails=1&accept-language=${currentLang}`);
     const data = await res.json();
     const a = data.address || {};
-    const label = a.suburb || a.neighbourhood || a.quarter || a.town || a.village
+    label = a.suburb || a.neighbourhood || a.quarter || a.town || a.village
       || a.city_district || a.municipality || a.city || a.county
       || (data.display_name ? data.display_name.split(",")[0] : null)
       || `${item.lat.toFixed(2)}, ${item.lng.toFixed(2)}`;
-    geocodeCache[item.cell] = label;
-    item.cb(label);
   } catch (err) {
-    const fallback = `${item.lat.toFixed(2)}, ${item.lng.toFixed(2)}`;
-    geocodeCache[item.cell] = fallback;
-    item.cb(fallback);
+    label = `${item.lat.toFixed(2)}, ${item.lng.toFixed(2)}`;
   }
+  geocodeCache[item.cell] = label;
+  callbacks.forEach((cb) => cb(label));
+
   setTimeout(() => { geocodeBusy = false; processGeocodeQueue(); }, 1100);
 }
 
@@ -318,7 +320,20 @@ function wireServiceSwitch() {
 // ---------------------------------------------------------------
 // Reports: submit
 // ---------------------------------------------------------------
+// Nour only tracks Tunisia — reports from far outside this box are rejected
+// so unrelated global testers/curious visitors can't pollute the map data.
+// Bounds are intentionally generous (covers the mainland plus Djerba/Kerkennah).
+const TUNISIA_BOUNDS = { minLat: 30.0, maxLat: 38.0, minLng: 7.0, maxLng: 12.0 };
+function isWithinTunisia(lat, lng) {
+  return lat >= TUNISIA_BOUNDS.minLat && lat <= TUNISIA_BOUNDS.maxLat
+      && lng >= TUNISIA_BOUNDS.minLng && lng <= TUNISIA_BOUNDS.maxLng;
+}
+
 async function submitReport(type, lat, lng, service) {
+  if (!isWithinTunisia(lat, lng)) {
+    showToast(t("toast_outside_tunisia"));
+    return;
+  }
   await authReady;
   const svc = service || activeService;
   const key = cellKey(lat, lng);
@@ -548,7 +563,7 @@ function renderOutagesTable() {
 
   body.innerHTML = rows.map((r) => `
     <tr data-lat="${r.lat}" data-lng="${r.lng}">
-      <td class="area-name" data-cell="${r.cell}" data-row="${r.id}">${t("locating")}</td>
+      <td class="area-name" data-cell="${r.cell}" data-row="${r.id}">${r.lat.toFixed(2)}, ${r.lng.toFixed(2)}</td>
       <td>${r.service === "water" ? "💧" : "⚡"}</td>
       <td>
         <span class="status-cell">

@@ -138,6 +138,7 @@ export const translations = {
     popup_power_back: "It's back",
     popup_remove_mine: "🗑 Remove",
     toast_report_removed: "Your report has been removed from the map.",
+    toast_outside_tunisia: "Nour only tracks Tunisia right now — this location is outside its coverage area.",
 
     feed_out_reported_power: "⚡ Power out reported",
     feed_on_reported_power: "✅ Power restored reported",
@@ -280,6 +281,7 @@ export const translations = {
     popup_power_back: "C'est revenu",
     popup_remove_mine: "🗑 Supprimer",
     toast_report_removed: "Votre signalement a été retiré de la carte.",
+    toast_outside_tunisia: "Nour ne suit que la Tunisie pour l'instant — cet endroit est hors de sa zone de couverture.",
 
     feed_out_reported_power: "⚡ Coupure de courant signalée",
     feed_on_reported_power: "✅ Retour du courant signalé",
@@ -422,6 +424,7 @@ export const translations = {
     popup_power_back: "رجعت",
     popup_remove_mine: "🗑 إزالة",
     toast_report_removed: "تم إزالة بلاغك من الخريطة.",
+    toast_outside_tunisia: "يغطي تطبيق نور تونس فقط حاليًا — هذا الموقع خارج نطاق التغطية.",
 
     feed_out_reported_power: "⚡ تم الإبلاغ عن انقطاع الكهرباء",
     feed_on_reported_power: "✅ تم الإبلاغ عن عودة الكهرباء",
