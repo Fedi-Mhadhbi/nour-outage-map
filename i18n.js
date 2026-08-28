@@ -136,6 +136,8 @@ export const translations = {
     popup_reports: "{out} outage report{outS} · {on} restored report{onS} · updated {time}",
     popup_still_out: "Still out",
     popup_power_back: "It's back",
+    popup_remove_mine: "🗑 Remove my report",
+    toast_report_removed: "Your report has been removed from the map.",
 
     feed_out_reported_power: "⚡ Power out reported",
     feed_on_reported_power: "✅ Power restored reported",
@@ -276,6 +278,8 @@ export const translations = {
     popup_reports: "{out} signalement{outS} de coupure · {on} signalement{onS} de retour · mis à jour {time}",
     popup_still_out: "Toujours coupé",
     popup_power_back: "C'est revenu",
+    popup_remove_mine: "🗑 Retirer mon signalement",
+    toast_report_removed: "Votre signalement a été retiré de la carte.",
 
     feed_out_reported_power: "⚡ Coupure de courant signalée",
     feed_on_reported_power: "✅ Retour du courant signalé",
@@ -416,6 +420,8 @@ export const translations = {
     popup_reports: "{out} بلاغ انقطاع · {on} بلاغ عودة · آخر تحديث {time}",
     popup_still_out: "لا تزال مقطوعة",
     popup_power_back: "رجعت",
+    popup_remove_mine: "🗑 إزالة بلاغي",
+    toast_report_removed: "تم إزالة بلاغك من الخريطة.",
 
     feed_out_reported_power: "⚡ تم الإبلاغ عن انقطاع الكهرباء",
     feed_on_reported_power: "✅ تم الإبلاغ عن عودة الكهرباء",
