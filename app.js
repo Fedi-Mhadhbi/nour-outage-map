@@ -1,8 +1,9 @@
 import { db, auth, authReady } from "./firebase-config.js";
 import {
   collection, doc, setDoc, updateDoc, onSnapshot,
-  query, where, Timestamp, serverTimestamp, increment, deleteDoc
+  query, where, orderBy, Timestamp, serverTimestamp, increment, deleteDoc, addDoc
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { t, setLang, currentLang, applyStaticTranslations } from "./i18n.js";
 
 // ---------------------------------------------------------------
 // Config
@@ -13,52 +14,185 @@ const TUNISIA_CENTER = [34.0, 9.4];
 const DEFAULT_ZOOM = 7;
 
 let uid = null;
-let map, reportLayer, sosLayer;
+let map, reportLayer, sosLayer, searchMarker;
 let unsubscribeReports = null;
 let unsubscribeSOS = null;
+let unsubscribeComments = null;
 let pendingReportType = null; // 'out' | 'on' | null — set when waiting for a map tap
 let selectedSOSReason = null;
 let mySOSDocId = null;
+let lastKnownLocation = null;   // {lat, lng} — used to sort the SOS list by distance
+let cellsData = {};             // latest aggregated outage cells, cached for the table view
+let sosData = [];                // latest active SOS docs
+let outageFilter = "all";
+let activeSOSDetailId = null;
+let searchedLocation = null;    // {lat, lng, label} picked from the search bar
 
 // ---------------------------------------------------------------
-// Helpers
+// Small helpers
 // ---------------------------------------------------------------
 function snap(lat, lng) {
   const f = Math.pow(10, GRID_PRECISION);
-  return {
-    lat: Math.round(lat * f) / f,
-    lng: Math.round(lng * f) / f
-  };
+  return { lat: Math.round(lat * f) / f, lng: Math.round(lng * f) / f };
 }
 function cellKey(lat, lng) {
   const s = snap(lat, lng);
   return `${s.lat.toFixed(GRID_PRECISION)}_${s.lng.toFixed(GRID_PRECISION)}`;
 }
 function timeAgo(ts) {
-  if (!ts) return "just now";
+  if (!ts) return t("time_just_now");
   const date = ts.toDate ? ts.toDate() : new Date(ts);
   const mins = Math.round((Date.now() - date.getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("time_just_now");
+  if (mins < 60) return t("time_m_ago", { m: mins });
   const hrs = Math.round(mins / 60);
-  return `${hrs}h ago`;
+  return t("time_h_ago", { h: hrs });
+}
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 function showToast(msg, ms = 3200) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.remove("hidden");
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.remove("hidden");
   clearTimeout(showToast._h);
-  showToast._h = setTimeout(() => t.classList.add("hidden"), ms);
+  showToast._h = setTimeout(() => el.classList.add("hidden"), ms);
 }
 function getLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("no geolocation"));
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => { lastKnownLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude }; resolve(lastKnownLocation); },
       (err) => reject(err),
       { enableHighAccuracy: true, timeout: 8000 }
     );
   });
+}
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------------------------------------------------------------
+// Reverse geocoding (cell -> human-readable area name), rate limited
+// ---------------------------------------------------------------
+const geocodeCache = {};
+const geocodeQueue = [];
+let geocodeBusy = false;
+
+function requestReverseGeocode(cell, lat, lng, cb) {
+  if (geocodeCache[cell]) { cb(geocodeCache[cell]); return; }
+  geocodeQueue.push({ cell, lat, lng, cb });
+  processGeocodeQueue();
+}
+async function processGeocodeQueue() {
+  if (geocodeBusy || geocodeQueue.length === 0) return;
+  geocodeBusy = true;
+  const item = geocodeQueue.shift();
+  if (geocodeCache[item.cell]) {
+    item.cb(geocodeCache[item.cell]);
+    geocodeBusy = false;
+    processGeocodeQueue();
+    return;
+  }
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${item.lat}&lon=${item.lng}&zoom=15&addressdetails=1&accept-language=${currentLang}`);
+    const data = await res.json();
+    const a = data.address || {};
+    const label = a.suburb || a.neighbourhood || a.quarter || a.town || a.village
+      || a.city_district || a.municipality || a.city || a.county
+      || (data.display_name ? data.display_name.split(",")[0] : null)
+      || `${item.lat.toFixed(2)}, ${item.lng.toFixed(2)}`;
+    geocodeCache[item.cell] = label;
+    item.cb(label);
+  } catch (err) {
+    const fallback = `${item.lat.toFixed(2)}, ${item.lng.toFixed(2)}`;
+    geocodeCache[item.cell] = fallback;
+    item.cb(fallback);
+  }
+  setTimeout(() => { geocodeBusy = false; processGeocodeQueue(); }, 1100);
+}
+
+// ---------------------------------------------------------------
+// Forward geocoding (search bar)
+// ---------------------------------------------------------------
+let searchDebounceTimer = null;
+
+function wireSearch() {
+  const input = document.getElementById("searchInput");
+  const clearBtn = document.getElementById("searchClear");
+  const resultsEl = document.getElementById("searchResults");
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    clearBtn.classList.toggle("hidden", q.length === 0);
+    clearTimeout(searchDebounceTimer);
+    if (q.length < 3) { hideResults(); return; }
+    resultsEl.innerHTML = `<li class="search-loading">${t("search_searching")}</li>`;
+    resultsEl.classList.remove("hidden");
+    searchDebounceTimer = setTimeout(() => doSearch(q), 450);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    input.value = "";
+    clearBtn.classList.add("hidden");
+    hideResults();
+  });
+
+  function hideResults() {
+    resultsEl.classList.add("hidden");
+    resultsEl.innerHTML = "";
+  }
+
+  async function doSearch(q) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&countrycodes=tn&addressdetails=1&limit=6&accept-language=${currentLang}`);
+      const data = await res.json();
+      if (!data.length) {
+        resultsEl.innerHTML = `<li class="search-empty">${t("search_no_matches")}</li>`;
+        return;
+      }
+      resultsEl.innerHTML = data.map((r, i) => {
+        const main = r.address?.suburb || r.address?.neighbourhood || r.address?.town || r.address?.village || r.address?.city || r.name || r.display_name.split(",")[0];
+        return `<li class="search-result-item" data-idx="${i}">
+          ${escapeHtml(main)}
+          <span class="search-result-sub">${escapeHtml(r.display_name)}</span>
+        </li>`;
+      }).join("");
+      resultsEl.querySelectorAll(".search-result-item").forEach((el) => {
+        el.onclick = () => {
+          const r = data[parseInt(el.dataset.idx, 10)];
+          selectSearchResult(r);
+          hideResults();
+        };
+      });
+    } catch (err) {
+      resultsEl.innerHTML = `<li class="search-empty">${t("search_failed")}</li>`;
+    }
+  }
+}
+
+function selectSearchResult(r) {
+  const lat = parseFloat(r.lat);
+  const lng = parseFloat(r.lon);
+  const label = r.address?.suburb || r.address?.neighbourhood || r.address?.town || r.address?.village || r.address?.city || r.display_name.split(",")[0];
+  searchedLocation = { lat, lng, label };
+
+  map.flyTo([lat, lng], 15, { duration: 0.8 });
+
+  if (searchMarker) map.removeLayer(searchMarker);
+  searchMarker = L.marker([lat, lng], {
+    icon: L.divIcon({ className: "", html: `<div class="nour-dot" style="width:14px;height:14px;background:#fff;box-shadow:0 0 10px #fff;"></div>`, iconSize: [14, 14] })
+  }).addTo(map);
+
+  document.getElementById("searchConfirmTitle").textContent = label;
+  document.getElementById("searchConfirmSub").textContent = t("search_confirm_sub");
+  document.getElementById("searchConfirmOverlay").classList.remove("hidden");
 }
 
 // ---------------------------------------------------------------
@@ -83,7 +217,7 @@ function initMap() {
       submitReport(pendingReportType, e.latlng.lat, e.latlng.lng);
       pendingReportType = null;
       document.body.classList.remove("picking");
-      showToast("Report placed. Thanks for helping the map!");
+      showToast(t("toast_report_placed"));
     }
   });
 }
@@ -111,7 +245,7 @@ async function submitReport(type, lat, lng) {
     });
   } catch (err) {
     console.error(err);
-    showToast("Couldn't send report — check your connection.");
+    showToast(t("toast_report_failed"));
   }
 }
 
@@ -119,16 +253,18 @@ async function handleFabReport(type) {
   try {
     const loc = await getLocation();
     await submitReport(type, loc.lat, loc.lng);
-    showToast(type === "out" ? "Marked: no power at your location." : "Marked: power confirmed back on.");
+    showToast(type === "out" ? t("toast_report_out") : t("toast_report_on"));
   } catch (err) {
-    showToast("Location unavailable — tap the map to mark the spot.");
+    showToast(t("toast_location_unavailable"));
     pendingReportType = type;
     document.body.classList.add("picking");
   }
 }
 
+let lastReportDocs = [];
+
 // ---------------------------------------------------------------
-// Reports: live sync + clustering + render
+// Reports: live sync + clustering + render (map, table, feed)
 // ---------------------------------------------------------------
 function subscribeReports() {
   if (unsubscribeReports) unsubscribeReports();
@@ -137,14 +273,12 @@ function subscribeReports() {
   unsubscribeReports = onSnapshot(q, (snap_) => {
     const docs = [];
     snap_.forEach((d) => docs.push({ id: d.id, ...d.data() }));
-    renderReports(docs);
-    renderFeed(docs);
+    aggregateAndRender(docs);
   }, (err) => console.error("reports subscribe error", err));
 }
 
-function renderReports(docs) {
-  reportLayer.clearLayers();
-
+function aggregateAndRender(docs) {
+  lastReportDocs = docs;
   const cells = {};
   for (const r of docs) {
     if (!r.cell || !r.updatedAt) continue;
@@ -155,21 +289,34 @@ function renderReports(docs) {
       cells[r.cell].lastUpdate = r.updatedAt;
     }
   }
+  cellsData = cells;
+  renderMapMarkers();
+  renderFeed(docs);
+  renderOutagesTable();
+}
 
+function renderMapMarkers() {
+  reportLayer.clearLayers();
   let darkZones = 0;
-  for (const key in cells) {
-    const c = cells[key];
+  for (const key in cellsData) {
+    const c = cellsData[key];
     let cls, label;
     if (c.out > c.on && c.out >= 2) { cls = "out"; label = c.out; darkZones++; }
     else if (c.out > c.on) { cls = "out-weak"; label = c.out; darkZones++; }
     else { cls = "on"; label = "✓"; }
 
     const marker = L.marker([c.lat, c.lng], { icon: makeDivIcon(cls, label) });
+    const title = cls === "on" ? t("popup_on") : (cls === "out" ? t("popup_out_confirmed") : t("popup_out_unconfirmed"));
+    const meta = t("popup_reports", {
+      out: c.out, outS: c.out === 1 ? "" : "s",
+      on: c.on, onS: c.on === 1 ? "" : "s",
+      time: timeAgo(c.lastUpdate)
+    });
     marker.bindPopup(`
-      <p class="popup-title">${cls === "on" ? "Power confirmed on" : "Power outage " + (cls === "out" ? "(confirmed)" : "(unconfirmed)")}</p>
-      <p class="popup-meta">${c.out} outage report${c.out === 1 ? "" : "s"} · ${c.on} restored report${c.on === 1 ? "" : "s"} · updated ${timeAgo(c.lastUpdate)}</p>
-      <button class="popup-btn" data-action="still-out" data-lat="${c.lat}" data-lng="${c.lng}">Still out</button>
-      <button class="popup-btn safe" data-action="its-on" data-lat="${c.lat}" data-lng="${c.lng}">Power's back</button>
+      <p class="popup-title">${title}</p>
+      <p class="popup-meta">${meta}</p>
+      <button class="popup-btn" data-action="still-out" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_still_out")}</button>
+      <button class="popup-btn safe" data-action="its-on" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_power_back")}</button>
     `);
     marker.on("popupopen", () => bindPopupButtons());
     marker.addTo(reportLayer);
@@ -184,7 +331,7 @@ function bindPopupButtons() {
       const lng = parseFloat(btn.dataset.lng);
       const type = btn.dataset.action === "still-out" ? "out" : "on";
       await submitReport(type, lat, lng);
-      showToast("Thanks — report updated.");
+      showToast(t("toast_report_updated"));
       map.closePopup();
     };
   });
@@ -198,14 +345,66 @@ function renderFeed(reportDocs) {
     .slice(0, 8);
 
   if (items.length === 0) {
-    list.innerHTML = `<li class="feed-empty">No reports yet — be the first tonight.</li>`;
+    list.innerHTML = `<li class="feed-empty">${t("feed_empty")}</li>`;
     return;
   }
   list.innerHTML = items.map((it) => `
-    <li>${it.type === "out" ? "⚡ Power out reported" : "✅ Power restored reported"}
+    <li>${it.type === "out" ? t("feed_out_reported") : t("feed_on_reported")}
       <span class="feed-time">${timeAgo(it.updatedAt)}</span>
     </li>
   `).join("");
+}
+
+function renderOutagesTable() {
+  const body = document.getElementById("outagesTableBody");
+  const keys = Object.keys(cellsData);
+  const rows = keys.map((key) => {
+    const c = cellsData[key];
+    const status = c.out > c.on ? "out" : "on";
+    return { key, ...c, status };
+  }).filter((r) => outageFilter === "all" ? true : r.status === outageFilter)
+    .sort((a, b) => b.lastUpdate.toMillis() - a.lastUpdate.toMillis());
+
+  if (rows.length === 0) {
+    body.innerHTML = `<tr><td colspan="4" class="table-empty">${keys.length === 0 ? t("table_empty") : t("table_filtered_empty")}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map((r) => `
+    <tr data-lat="${r.lat}" data-lng="${r.lng}" data-key="${r.key}">
+      <td class="area-name" data-key="${r.key}">${t("locating")}</td>
+      <td>
+        <span class="status-cell">
+          <span class="dot ${r.status === "out" ? (r.out >= 2 ? "dot-out" : "dot-out-weak") : "dot-on"}"></span>
+          ${r.status === "out" ? t("status_no_power") : t("status_power_on")}
+        </span>
+      </td>
+      <td>${timeAgo(r.lastUpdate)}</td>
+      <td><button class="row-btn" data-goto-lat="${r.lat}" data-goto-lng="${r.lng}">${t("table_view")}</button></td>
+    </tr>
+  `).join("");
+
+  rows.forEach((r) => {
+    requestReverseGeocode(r.key, r.lat, r.lng, (label) => {
+      const cell = body.querySelector(`.area-name[data-key="${r.key}"]`);
+      if (cell) cell.textContent = label;
+    });
+  });
+
+  body.querySelectorAll("[data-goto-lat]").forEach((btn) => {
+    btn.onclick = () => {
+      const lat = parseFloat(btn.dataset.gotoLat);
+      const lng = parseFloat(btn.dataset.gotoLng);
+      document.getElementById("panel").classList.add("panel-hidden");
+      map.flyTo([lat, lng], 15, { duration: 0.8 });
+      setTimeout(() => {
+        reportLayer.eachLayer((m) => {
+          const ll = m.getLatLng();
+          if (Math.abs(ll.lat - lat) < 0.001 && Math.abs(ll.lng - lng) < 0.001) m.openPopup();
+        });
+      }, 900);
+    };
+  });
 }
 
 // ---------------------------------------------------------------
@@ -240,20 +439,21 @@ async function submitSOS() {
     mySOSDocId = docId;
     localStorage.setItem("nour_active_sos", docId);
     closeSOSSheet();
-    showToast("SOS sent. Nearby people can now see you may need help.");
+    showToast(t("toast_sos_sent"));
   } catch (err) {
     console.error(err);
-    showToast("Location is required to send an SOS. Please enable location access.");
+    showToast(t("toast_sos_location_required"));
   }
 }
 
-async function markSafe() {
-  if (!mySOSDocId) return;
+async function markSafe(sosId) {
+  const id = sosId || mySOSDocId;
+  if (!id) return;
   try {
-    await deleteDoc(doc(db, "sos", mySOSDocId));
-    localStorage.removeItem("nour_active_sos");
-    mySOSDocId = null;
-    showToast("Marked safe. Your SOS has been cleared.");
+    await deleteDoc(doc(db, "sos", id));
+    if (id === mySOSDocId) { localStorage.removeItem("nour_active_sos"); mySOSDocId = null; }
+    showToast(t("toast_safe_marked"));
+    closeSOSDetail();
     map.closePopup();
   } catch (err) {
     console.error(err);
@@ -263,70 +463,164 @@ async function markSafe() {
 async function offerHelp(sosId) {
   try {
     await updateDoc(doc(db, "sos", sosId), { helpersCount: increment(1) });
-    showToast("Thanks — the person will know help may be on the way. Reach out if you can.");
   } catch (err) {
     console.error(err);
   }
 }
 
 // ---------------------------------------------------------------
-// SOS: live sync + render
+// SOS: live sync + render (map pins, list tab)
 // ---------------------------------------------------------------
 function subscribeSOS() {
   if (unsubscribeSOS) unsubscribeSOS();
   const q = query(collection(db, "sos"), where("active", "==", true));
   unsubscribeSOS = onSnapshot(q, (snap_) => {
-    sosLayer.clearLayers();
-    let count = 0;
-    snap_.forEach((d) => {
-      const s = d.data();
-      count++;
-      const mine = s.uid === uid;
-      if (mine) mySOSDocId = d.id;
-
-      const marker = L.marker([s.lat, s.lng], { icon: makeDivIcon("sos", "🆘") });
-      const reasonLabel = {
-        oxygen: "Needs oxygen concentrator power",
-        fridge: "Fridge-stored medication at risk",
-        medical: "Depends on another medical device",
-        other: "Other emergency"
-      }[s.reason] || "Emergency";
-
-      marker.bindPopup(`
-        <p class="popup-title">${reasonLabel}</p>
-        <p class="popup-meta">Reported ${timeAgo(s.createdAt)} · ${s.helpersCount || 0} people offered help</p>
-        ${s.note ? `<p class="popup-note">"${escapeHtml(s.note)}"</p>` : ""}
-        ${mine
-          ? `<button class="popup-btn safe" data-sos-safe="1">I'm safe now</button>`
-          : `<button class="popup-btn help" data-sos-help="${d.id}">I can help</button>
-             ${s.contact ? "" : `<p class="popup-meta">Contact revealed once you offer to help.</p>`}`
-        }
-      `);
-      marker.on("popupopen", () => {
-        const helpBtn = document.querySelector(`[data-sos-help="${d.id}"]`);
-        if (helpBtn) helpBtn.onclick = async () => {
-          await offerHelp(d.id);
-          if (s.contact) {
-            const p = document.createElement("p");
-            p.className = "popup-note";
-            p.textContent = `Contact: ${s.contact}`;
-            helpBtn.after(p);
-          }
-          helpBtn.disabled = true;
-        };
-        const safeBtn = document.querySelector('[data-sos-safe="1"]');
-        if (safeBtn) safeBtn.onclick = markSafe;
-      });
-      marker.addTo(sosLayer);
-    });
-    document.getElementById("statSOS").textContent = count;
+    const docs = [];
+    snap_.forEach((d) => docs.push({ id: d.id, ...d.data() }));
+    sosData = docs;
+    renderSOSMarkers();
+    renderSOSList();
   }, (err) => console.error("sos subscribe error", err));
 }
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
+function reasonLabel(reason) {
+  return t(`reason_${reason}_full`);
+}
+
+function renderSOSMarkers() {
+  sosLayer.clearLayers();
+  sosData.forEach((s) => {
+    const mine = s.uid === uid;
+    if (mine) mySOSDocId = s.id;
+    const marker = L.marker([s.lat, s.lng], { icon: makeDivIcon("sos", "🆘") });
+    marker.on("click", () => openSOSDetail(s.id));
+    marker.addTo(sosLayer);
+  });
+  document.getElementById("statSOS").textContent = sosData.length;
+}
+
+function renderSOSList() {
+  const list = document.getElementById("sosListItems");
+  if (sosData.length === 0) {
+    list.innerHTML = `<li class="feed-empty">${t("sos_empty")}</li>`;
+    return;
+  }
+  const withDistance = sosData.map((s) => ({
+    ...s,
+    dist: lastKnownLocation ? distanceKm(lastKnownLocation.lat, lastKnownLocation.lng, s.lat, s.lng) : null
+  }));
+  withDistance.sort((a, b) => {
+    if (a.dist == null && b.dist == null) return (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0);
+    if (a.dist == null) return 1;
+    if (b.dist == null) return -1;
+    return a.dist - b.dist;
+  });
+
+  list.innerHTML = withDistance.map((s) => `
+    <li class="sos-item" data-id="${s.id}">
+      <div class="sos-item-top">
+        <span class="sos-item-reason">${reasonLabel(s.reason)}</span>
+        ${s.dist != null ? `<span class="sos-item-dist">${s.dist < 1 ? Math.round(s.dist * 1000) + "m" : s.dist.toFixed(1) + "km"}</span>` : ""}
+      </div>
+      <div class="sos-item-meta">${timeAgo(s.createdAt)} · ${t("sos_helpers", { n: s.helpersCount || 0 })}</div>
+    </li>
+  `).join("");
+
+  list.querySelectorAll(".sos-item").forEach((el) => {
+    el.onclick = () => openSOSDetail(el.dataset.id);
+  });
+}
+
+// ---------------------------------------------------------------
+// SOS detail sheet + comments
+// ---------------------------------------------------------------
+function openSOSDetail(sosId) {
+  const s = sosData.find((x) => x.id === sosId);
+  if (!s) return;
+  activeSOSDetailId = sosId;
+  const mine = s.uid === uid;
+
+  document.getElementById("sosDetailTitle").textContent = reasonLabel(s.reason);
+  document.getElementById("sosDetailMeta").textContent = t("sos_detail_meta", {
+    time: timeAgo(s.createdAt),
+    n: s.helpersCount || 0,
+    contact: s.contact ? t("sos_detail_contact_note") : ""
+  });
+  document.getElementById("sosDetailNote").textContent = s.note ? `"${s.note}"` : "";
+  document.getElementById("sosDetailOwnerActions").classList.toggle("hidden", !mine);
+
+  document.getElementById("sosDetailMarkSafe").onclick = () => markSafe(sosId);
+
+  document.getElementById("commentInput").value = "";
+  document.getElementById("commentSend").onclick = () => sendComment(sosId, mine);
+
+  subscribeComments(sosId);
+  document.getElementById("sosDetailOverlay").classList.remove("hidden");
+
+  if (!mine) offerHelp(sosId);
+}
+
+function closeSOSDetail() {
+  document.getElementById("sosDetailOverlay").classList.add("hidden");
+  if (unsubscribeComments) unsubscribeComments();
+  activeSOSDetailId = null;
+}
+
+function subscribeComments(sosId) {
+  if (unsubscribeComments) unsubscribeComments();
+  const q = query(collection(db, "sos", sosId, "comments"), orderBy("createdAt", "asc"));
+  unsubscribeComments = onSnapshot(q, (snap_) => {
+    const list = document.getElementById("commentList");
+    if (snap_.empty) {
+      list.innerHTML = `<li class="feed-empty">${t("sos_detail_no_messages")}</li>`;
+      return;
+    }
+    const items = [];
+    snap_.forEach((d) => items.push(d.data()));
+    list.innerHTML = items.map((c) => `
+      <li>${escapeHtml(c.text)}<span class="comment-time">${timeAgo(c.createdAt)}</span></li>
+    `).join("");
+    list.scrollTop = list.scrollHeight;
+  }, (err) => console.error("comments subscribe error", err));
+}
+
+async function sendComment(sosId, isOwner) {
+  await authReady;
+  const input = document.getElementById("commentInput");
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    await addDoc(collection(db, "sos", sosId, "comments"), {
+      uid, text, createdAt: serverTimestamp()
+    });
+    input.value = "";
+    if (!isOwner) showToast(t("toast_message_sent"));
+  } catch (err) {
+    console.error(err);
+    showToast(t("toast_message_failed"));
+  }
+}
+
+// ---------------------------------------------------------------
+// Language switching
+// ---------------------------------------------------------------
+function wireLangSwitch() {
+  const buttons = document.querySelectorAll(".lang-btn");
+  function refreshActive() {
+    buttons.forEach((b) => b.classList.toggle("active", b.dataset.lang === currentLang));
+  }
+  buttons.forEach((btn) => {
+    btn.onclick = () => {
+      setLang(btn.dataset.lang);
+      applyStaticTranslations();
+      refreshActive();
+      renderMapMarkers();
+      renderFeed(lastReportDocs);
+      renderOutagesTable();
+      renderSOSList();
+    };
+  });
+  refreshActive();
 }
 
 // ---------------------------------------------------------------
@@ -355,12 +649,57 @@ function wireUI() {
       document.getElementById("sosSubmit").disabled = false;
     };
   });
+
+  document.getElementById("sosDetailClose").onclick = closeSOSDetail;
+
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab" + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add("active");
+      if (btn.dataset.tab === "sos") renderSOSList();
+      if (btn.dataset.tab === "outages") renderOutagesTable();
+    };
+  });
+
+  document.querySelectorAll(".filter-chip").forEach((chip) => {
+    chip.onclick = () => {
+      document.querySelectorAll(".filter-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      outageFilter = chip.dataset.filter;
+      renderOutagesTable();
+    };
+  });
+
+  wireSearch();
+  wireLangSwitch();
+
+  document.getElementById("searchConfirmCancel").onclick = () => {
+    document.getElementById("searchConfirmOverlay").classList.add("hidden");
+    if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+  };
+  document.getElementById("searchConfirmOut").onclick = async () => {
+    if (!searchedLocation) return;
+    await submitReport("out", searchedLocation.lat, searchedLocation.lng);
+    showToast(t("toast_search_out", { label: searchedLocation.label }));
+    document.getElementById("searchConfirmOverlay").classList.add("hidden");
+  };
+  document.getElementById("searchConfirmOn").onclick = async () => {
+    if (!searchedLocation) return;
+    await submitReport("on", searchedLocation.lat, searchedLocation.lng);
+    showToast(t("toast_search_on", { label: searchedLocation.label }));
+    document.getElementById("searchConfirmOverlay").classList.add("hidden");
+  };
 }
 
 // ---------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------
 async function boot() {
+  setLang(currentLang);
+  applyStaticTranslations();
+
   await authReady;
   uid = auth.currentUser ? auth.currentUser.uid : (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()));
   mySOSDocId = localStorage.getItem("nour_active_sos") || null;
@@ -370,7 +709,8 @@ async function boot() {
   subscribeReports();
   subscribeSOS();
 
-  // slide the "stale reports" time window forward periodically
+  getLocation().catch(() => {});
+
   setInterval(subscribeReports, 5 * 60 * 1000);
 }
 
