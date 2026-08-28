@@ -235,9 +235,12 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 }
 
 /* Search toggle/collapse icons: irrelevant on desktop, where the search
-   box is always shown inline as before. */
-.search-toggle-btn{ display:none; }
-.search-collapse-btn{ display:none; }
+   box is always shown inline as before. pointer-events:auto is required
+   here because the parent #searchWrap sets pointer-events:none (so empty
+   space around the search bar doesn't block map taps) — without this
+   override these buttons would be visible but silently unclickable. */
+.search-toggle-btn{ display:none; pointer-events:auto; }
+.search-collapse-btn{ display:none; pointer-events:auto; }
 
 /* ---------- Map ---------- */
 #map{
