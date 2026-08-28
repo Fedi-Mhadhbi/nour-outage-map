@@ -9,7 +9,7 @@ import { t, setLang, currentLang, applyStaticTranslations } from "./i18n.js";
 // ---------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------
-const STALE_HOURS = 4;            // outage reports older than this stop counting
+const STALE_HOURS = 12;           // outage reports older than this stop counting
 const GRID_PRECISION = 2;         // ~1.1km grid cells for grouping + SOS privacy
 const TUNISIA_CENTER = [34.0, 9.4];
 const DEFAULT_ZOOM = 7;
