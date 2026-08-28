@@ -234,6 +234,11 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   padding: 10px; font-size: 13px; color: var(--text-muted); font-style: italic;
 }
 
+/* Search toggle/collapse icons: irrelevant on desktop, where the search
+   box is always shown inline as before. */
+.search-toggle-btn{ display:none; }
+.search-collapse-btn{ display:none; }
+
 /* ---------- Map ---------- */
 #map{
   position:absolute;
@@ -314,6 +319,12 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 }
 .popup-btn.help{ background: var(--sos); color:#0B1220; }
 .popup-btn.safe{ background: var(--on); color:#0B1220; }
+.popup-btn.remove{
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  margin-top: 4px;
+}
 
 /* ---------- FABs ---------- */
 #fabRow{
@@ -677,6 +688,46 @@ textarea{ height: 64px; }
   body.rtl #menuToggle{ justify-self: start; }
   body.rtl #serviceSwitch{ justify-self: start; }
   body.rtl #langSwitch{ justify-self: end; }
+
+  /* Collapse the search bar to a small round icon so it doesn't sit on
+     top of the map. Tapping it expands the full input + results. */
+  #searchWrap{
+    left: auto; right: 14px;
+    padding: 0;
+    align-items: flex-end;
+  }
+  .search-toggle-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+  }
+  .search-box, .search-results{ display:none; }
+  .search-collapse-btn{
+    display:none;
+    background:none; border:none; color: var(--text-muted);
+    cursor:pointer; font-size: 13px; padding: 2px 4px;
+  }
+
+  #searchWrap.expanded{
+    left: 0; right: 0;
+    padding: 0 14px;
+    align-items: center;
+  }
+  #searchWrap.expanded .search-toggle-btn{ display:none; }
+  #searchWrap.expanded .search-box{ display:flex; }
+  #searchWrap.expanded .search-collapse-btn{ display:block; }
+  #searchWrap.expanded .search-results:not(.hidden){ display:block; }
+
+  body.rtl #searchWrap{ left: 14px; right: auto; }
+  body.rtl #searchWrap.expanded{ left: 0; right: 0; }
 }
 
 @media (max-width: 480px){

@@ -154,6 +154,28 @@ function wireSearch() {
   const input = document.getElementById("searchInput");
   const clearBtn = document.getElementById("searchClear");
   const resultsEl = document.getElementById("searchResults");
+  const wrap = document.getElementById("searchWrap");
+  const toggleBtn = document.getElementById("searchToggle");
+  const collapseBtn = document.getElementById("searchCollapse");
+
+  // On mobile the search bar starts collapsed to a small icon so it
+  // doesn't sit on top of the map. Tapping it expands the full input;
+  // on desktop these buttons stay hidden via CSS and this is a no-op.
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      wrap.classList.add("expanded");
+      setTimeout(() => input.focus(), 50);
+    };
+  }
+  if (collapseBtn) {
+    collapseBtn.onclick = () => {
+      wrap.classList.remove("expanded");
+      input.value = "";
+      clearBtn.classList.add("hidden");
+      hideResults();
+      input.blur();
+    };
+  }
 
   input.addEventListener("input", () => {
     const q = input.value.trim();
@@ -220,6 +242,11 @@ function selectSearchResult(r) {
   document.getElementById("searchConfirmTitle").textContent = label;
   document.getElementById("searchConfirmSub").textContent = t("search_confirm_sub");
   document.getElementById("searchConfirmOverlay").classList.remove("hidden");
+
+  // Collapse the mobile search icon back down now that a place was picked
+  // (no-op on desktop, where the search box is always shown inline).
+  const wrap = document.getElementById("searchWrap");
+  if (wrap) wrap.classList.remove("expanded");
 }
 
 // ---------------------------------------------------------------
@@ -423,11 +450,13 @@ function renderMapMarkers() {
         ? (c.out >= 2 ? t("popup_out_confirmed", { service: t(`service_${activeService}`) }) : t("popup_out_unconfirmed", { service: t(`service_${activeService}`) }))
         : t("popup_on", { service: t(`service_${activeService}`) });
 
+      const isMine = r.uid === uid;
       marker.bindPopup(`
         <p class="popup-title">${title}</p>
         <p class="popup-meta">${meta}</p>
         <button class="popup-btn" data-action="still-out" data-lat="${c.lat}" data-lng="${c.lng}" data-service="${c.service}">${t("popup_still_out")}</button>
         <button class="popup-btn safe" data-action="its-on" data-lat="${c.lat}" data-lng="${c.lng}" data-service="${c.service}">${t("popup_power_back")}</button>
+        ${isMine ? `<button class="popup-btn remove" data-action="remove-mine" data-report-id="${r.id}">${t("popup_remove_mine")}</button>` : ""}
       `);
       marker.on("popupopen", () => bindPopupButtons());
       marker.addTo(reportLayer);
@@ -447,7 +476,19 @@ function renderMapMarkers() {
 }
 
 function bindPopupButtons() {
-  document.querySelectorAll(".popup-btn[data-action]").forEach((btn) => {
+  document.querySelectorAll(".popup-btn[data-action='remove-mine']").forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await deleteDoc(doc(db, "reports", btn.dataset.reportId));
+        showToast(t("toast_report_removed"));
+        map.closePopup();
+      } catch (err) {
+        console.error(err);
+        showToast(t("toast_report_failed"));
+      }
+    };
+  });
+  document.querySelectorAll(".popup-btn[data-action='still-out'], .popup-btn[data-action='its-on']").forEach((btn) => {
     btn.onclick = async () => {
       const lat = parseFloat(btn.dataset.lat);
       const lng = parseFloat(btn.dataset.lng);

@@ -55,10 +55,12 @@
 
   <!-- Search bar -->
   <div id="searchWrap">
-    <div class="search-box">
+    <button id="searchToggle" class="search-toggle-btn" aria-label="Search">🔍</button>
+    <div class="search-box" id="searchBox">
       <span class="search-icon">🔍</span>
       <input id="searchInput" type="text" data-i18n-placeholder="search_placeholder" placeholder="Search your neighborhood, town, or street…" autocomplete="off" />
       <button id="searchClear" class="search-clear hidden">✕</button>
+      <button id="searchCollapse" class="search-collapse-btn" aria-label="Close search">✕</button>
     </div>
     <ul id="searchResults" class="search-results hidden"></ul>
   </div>
