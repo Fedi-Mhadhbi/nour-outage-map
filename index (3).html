@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Nour — Live Power Outage Map Tunisia</title>
+<meta name="description" content="Crowdsourced live power outage map for Tunisia. Report outages, see what's dark near you, and flag medical emergencies." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Top bar -->
+  <header id="topbar">
+    <div class="brand">
+      <span class="bulb" id="bulb">●</span>
+      <div class="brand-text">
+        <span class="brand-name">Nour</span>
+        <span class="brand-sub" data-i18n="brand_sub">live outage map</span>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat">
+        <span class="stat-value" id="statDark">0</span>
+        <span class="stat-label" data-i18n="stat_zones_dark">zones dark</span>
+      </div>
+      <div class="stat stat-sos">
+        <span class="stat-value" id="statSOS">0</span>
+        <span class="stat-label" data-i18n="stat_active_sos">active SOS</span>
+      </div>
+    </div>
+
+    <div class="lang-switch" id="langSwitch">
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="fr">FR</button>
+      <button class="lang-btn" data-lang="ar">ع</button>
+    </div>
+
+    <button id="menuToggle" class="icon-btn" aria-label="Open panel">☰</button>
+  </header>
+
+  <!-- Search bar -->
+  <div id="searchWrap">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input id="searchInput" type="text" data-i18n-placeholder="search_placeholder" placeholder="Search your neighborhood, town, or street…" autocomplete="off" />
+      <button id="searchClear" class="search-clear hidden">✕</button>
+    </div>
+    <ul id="searchResults" class="search-results hidden"></ul>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Floating action buttons -->
+  <div id="fabRow">
+    <button id="fabReportOut" class="fab fab-out" data-i18n="fab_out">⚡ No power here</button>
+    <button id="fabReportOn" class="fab fab-on" data-i18n="fab_on">✅ Power's back</button>
+    <button id="fabSOS" class="fab fab-sos" data-i18n="fab_sos">🆘 Medical SOS</button>
+  </div>
+
+  <!-- Side panel -->
+  <aside id="panel" class="panel-hidden">
+    <div class="panel-header">
+      <h2 data-i18n="panel_title">Nour dashboard</h2>
+      <button id="panelClose" class="icon-btn">✕</button>
+    </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" data-tab="legend" data-i18n="tab_legend">Legend</button>
+      <button class="tab-btn" data-tab="outages" data-i18n="tab_outages">Outages</button>
+      <button class="tab-btn" data-tab="sos" data-i18n="tab_sos">SOS nearby</button>
+    </div>
+
+    <!-- Legend + feed tab -->
+    <div class="tab-panel active" id="tabLegend">
+      <div class="legend">
+        <div class="legend-row"><span class="dot dot-out"></span> <span data-i18n="legend_out_confirmed">Power out (confirmed by multiple reports)</span></div>
+        <div class="legend-row"><span class="dot dot-out-weak"></span> <span data-i18n="legend_out_unconfirmed">Power out (unconfirmed, 1 report)</span></div>
+        <div class="legend-row"><span class="dot dot-on"></span> <span data-i18n="legend_on">Power confirmed back on</span></div>
+        <div class="legend-row"><span class="dot dot-sos"></span> <span data-i18n="legend_sos">Active medical SOS nearby</span></div>
+      </div>
+
+      <div class="panel-section">
+        <h3 data-i18n="recent_activity">Recent activity</h3>
+        <ul id="feedList" class="feed-list">
+          <li class="feed-empty" data-i18n="feed_empty">No reports yet — be the first tonight.</li>
+        </ul>
+      </div>
+
+      <div class="panel-section panel-about">
+        <h3 data-i18n="about_title">About Nour</h3>
+        <p data-i18n="about_text">Nour is a community-run map. It is not affiliated with STEG. Reports auto-expire after a few hours so the map always reflects what people are seeing right now. Please only report what you can personally confirm.</p>
+      </div>
+    </div>
+
+    <!-- Outages table tab -->
+    <div class="tab-panel" id="tabOutages">
+      <div class="filter-row">
+        <button class="filter-chip active" data-filter="all" data-i18n="filter_all">All</button>
+        <button class="filter-chip" data-filter="out" data-i18n="filter_out">Out</button>
+        <button class="filter-chip" data-filter="on" data-i18n="filter_on">Back on</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th data-i18n="table_area">Area</th>
+            <th data-i18n="table_status">Status</th>
+            <th data-i18n="table_updated">Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="outagesTableBody">
+          <tr><td colspan="4" class="table-empty" data-i18n="table_empty">No reports yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SOS list tab -->
+    <div class="tab-panel" id="tabSOS">
+      <p class="panel-hint" data-i18n="sos_hint">Sorted by distance from you when location is available.</p>
+      <ul id="sosListItems" class="sos-list">
+        <li class="feed-empty" data-i18n="sos_empty">No active SOS right now.</li>
+      </ul>
+    </div>
+  </aside>
+
+  <!-- SOS creation sheet -->
+  <div id="sheetOverlay" class="sheet-overlay hidden">
+    <div class="sheet" id="sosSheet">
+      <h2 data-i18n="sos_sheet_title">Medical SOS</h2>
+      <p class="sheet-sub" data-i18n="sos_sheet_sub">This alerts people near your approximate area (not your exact address) that someone nearby may need help during the outage.</p>
+
+      <label class="field-label" data-i18n="sos_situation_label">What's the situation?</label>
+      <div class="chip-row" id="sosReasonChips">
+        <button class="chip" data-reason="oxygen" data-i18n="reason_oxygen">Oxygen concentrator</button>
+        <button class="chip" data-reason="fridge" data-i18n="reason_fridge">Fridge-stored medication</button>
+        <button class="chip" data-reason="medical" data-i18n="reason_medical">Other medical device</button>
+        <button class="chip" data-reason="other" data-i18n="reason_other">Other emergency</button>
+      </div>
+
+      <label class="field-label" for="sosNote" data-i18n="sos_note_label">Optional note (visible to helpers)</label>
+      <textarea id="sosNote" maxlength="140" data-i18n-placeholder="sos_note_placeholder" placeholder="e.g. 3rd floor, blue door, ring twice"></textarea>
+
+      <label class="field-label" for="sosContact" data-i18n="sos_contact_label">Optional contact info (only shown to people who tap "I can help")</label>
+      <input id="sosContact" type="text" maxlength="60" data-i18n-placeholder="sos_contact_placeholder" placeholder="Phone number or leave blank" />
+
+      <div class="sheet-actions">
+        <button id="sosCancel" class="btn btn-ghost" data-i18n="sos_cancel">Cancel</button>
+        <button id="sosSubmit" class="btn btn-danger" disabled data-i18n="sos_send">Send SOS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOS detail + comments sheet -->
+  <div id="sosDetailOverlay" class="sheet-overlay hidden">
+    <div class="sheet" id="sosDetailSheet">
+      <div class="sheet-header-row">
+        <h2 id="sosDetailTitle">Emergency</h2>
+        <button id="sosDetailClose" class="icon-btn">✕</button>
+      </div>
+      <p class="popup-meta" id="sosDetailMeta"></p>
+      <p class="popup-note" id="sosDetailNote"></p>
+      <div id="sosDetailOwnerActions" class="hidden">
+        <button id="sosDetailMarkSafe" class="btn btn-danger" style="width:100%;" data-i18n="sos_detail_mark_safe">I'm safe now</button>
+      </div>
+
+      <div class="comment-thread">
+        <h3 data-i18n="sos_detail_messages">Messages</h3>
+        <ul id="commentList" class="comment-list">
+          <li class="feed-empty" data-i18n="sos_detail_no_messages">No messages yet.</li>
+        </ul>
+      </div>
+
+      <div class="comment-input-row">
+        <input id="commentInput" type="text" maxlength="200" data-i18n-placeholder="comment_placeholder" placeholder="e.g. I can help, call me at 55 123 456" />
+        <button id="commentSend" class="btn btn-danger" data-i18n="comment_send">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report confirm popup for searched location -->
+  <div id="searchConfirmOverlay" class="sheet-overlay hidden">
+    <div class="sheet" id="searchConfirmSheet">
+      <h2 id="searchConfirmTitle">Report at this location?</h2>
+      <p class="sheet-sub" id="searchConfirmSub" data-i18n="search_confirm_sub"></p>
+      <div class="sheet-actions">
+        <button id="searchConfirmCancel" class="btn btn-ghost" data-i18n="search_confirm_cancel">Cancel</button>
+        <button id="searchConfirmOut" class="btn btn-danger" data-i18n="search_confirm_out">⚡ No power</button>
+        <button id="searchConfirmOn" class="btn btn-on" data-i18n="search_confirm_on">✅ Power's back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="app.js"></script>
+
+</body>
+</html>
