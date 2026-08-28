@@ -379,7 +379,11 @@ function renderMapMarkers() {
   for (const key in cellsData) {
     const c = cellsData[key];
     if (c.service !== activeService) continue;
-    const cellIsOut = c.out > c.on;
+    // A cell renders red "out" markers on the map as soon as it has ANY out
+    // report (see the marker-coloring logic below, which never nets out
+    // reports against on reports) — so the "zones dark" stat has to use the
+    // same rule, or it reads 0 while a red marker is clearly visible.
+    const cellIsOut = c.out > 0;
     if (cellIsOut) darkZones++;
 
     const reportsHere = (byCell[key] || []).slice().sort((a, b) => (a.uid || "").localeCompare(b.uid || ""));

@@ -630,8 +630,70 @@ textarea{ height: 64px; }
 .toast.hidden{ display:none; }
 
 /* ---------- Responsive ---------- */
+
+/* Let the outages table scroll horizontally on narrow panels instead of
+   squishing its columns unreadably. */
+#tabOutages{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table{ min-width: 460px; }
+
+@media (max-width: 720px){
+  /* The default topbar is a single non-wrapping flex row (brand + stats +
+     service switch + lang switch + menu button). On narrow screens those
+     five items together are wider than the viewport, so the ☰ button gets
+     pushed past the right edge and becomes invisible/unreachable. A grid
+     with explicit areas guarantees every control stays on-screen. */
+  #topbar{
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand   menu"
+      "stats   stats"
+      "service lang";
+    row-gap: 10px;
+    align-items: center;
+    padding: 12px 14px 10px;
+  }
+  .brand{ grid-area: brand; }
+  #menuToggle{ grid-area: menu; justify-self: end; align-self: start; }
+  .stats{ grid-area: stats; justify-content: center; gap: 28px; }
+  #serviceSwitch{ grid-area: service; justify-self: end; }
+  #langSwitch{ grid-area: lang; justify-self: start; }
+
+  #searchWrap{ top: 148px; }
+
+  body.rtl #topbar{
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "menu    brand"
+      "stats   stats"
+      "lang    service";
+  }
+  body.rtl #menuToggle{ justify-self: start; }
+  body.rtl #serviceSwitch{ justify-self: start; }
+  body.rtl #langSwitch{ justify-self: end; }
+}
+
 @media (max-width: 480px){
   .brand-sub{ display:none; }
+  .brand-name{ font-size: 17px; }
   .fab{ font-size:13px; padding: 10px 14px; }
-  .stats{ gap:12px; }
+  .stats{ gap:20px; }
+  .stat{ min-width: 52px; }
+  #searchWrap{ top: 140px; }
+  .search-box{ padding: 9px 10px; }
+  #panel{ width: min(360px, 92vw); padding: 16px 14px; }
+  .sheet{ padding: 18px 16px 22px; }
+}
+
+@media (max-width: 360px){
+  .stats{ gap:14px; }
+  .service-btn{ padding: 6px 8px; font-size: 11px; }
+  .lang-btn{ padding: 6px 7px; font-size: 11px; }
+}
+
+/* Respect iPhone-style safe areas so the FAB row and menu button never
+   sit under a home-indicator or notch. */
+@supports (padding: max(0px)){
+  #fabRow{ padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+  #topbar{ padding-top: max(14px, env(safe-area-inset-top)); }
 }
