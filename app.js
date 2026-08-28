@@ -239,10 +239,19 @@ async function submitReport(type, lat, lng) {
   const s = snap(lat, lng);
   const docId = `${uid}_${key}`;
   try {
+    // If this device's last report landed in a *different* nearby cell
+    // (GPS drift between visits, or reporting from phone vs PC), remove
+    // the old one so it doesn't keep showing a stale/contradicting status.
+    const prevKey = localStorage.getItem("nour_last_report_cell");
+    if (prevKey && prevKey !== key) {
+      try { await deleteDoc(doc(db, "reports", `${uid}_${prevKey}`)); } catch (e) { /* may not exist / may already be stale, ignore */ }
+    }
+
     await setDoc(doc(db, "reports", docId), {
       uid, cell: key, lat: s.lat, lng: s.lng, type,
       updatedAt: serverTimestamp()
     });
+    localStorage.setItem("nour_last_report_cell", key);
   } catch (err) {
     console.error(err);
     showToast(t("toast_report_failed"));
@@ -295,31 +304,73 @@ function aggregateAndRender(docs) {
   renderOutagesTable();
 }
 
+// Small deterministic offset so multiple reports at (near) the same spot
+// render as separate visible dots instead of stacking into one marker.
+function offsetForIndex(i, n) {
+  if (n <= 1) return { dLat: 0, dLng: 0 };
+  const radius = 0.0009; // ~90-100m ring around the true location
+  const angle = (2 * Math.PI * i) / n;
+  return { dLat: Math.sin(angle) * radius, dLng: Math.cos(angle) * radius };
+}
+
 function renderMapMarkers() {
   reportLayer.clearLayers();
   let darkZones = 0;
+
+  // group the raw (per-user) reports by cell so every individual report
+  // gets its own marker, even when several land in the same grid cell
+  const byCell = {};
+  for (const r of lastReportDocs) {
+    if (!r.cell || !r.updatedAt) continue;
+    (byCell[r.cell] = byCell[r.cell] || []).push(r);
+  }
+
   for (const key in cellsData) {
     const c = cellsData[key];
-    let cls, label;
-    if (c.out > c.on && c.out >= 2) { cls = "out"; label = c.out; darkZones++; }
-    else if (c.out > c.on) { cls = "out-weak"; label = c.out; darkZones++; }
-    else { cls = "on"; label = "✓"; }
+    const cellIsOut = c.out > c.on;
+    if (cellIsOut) darkZones++;
 
-    const marker = L.marker([c.lat, c.lng], { icon: makeDivIcon(cls, label) });
-    const title = cls === "on" ? t("popup_on") : (cls === "out" ? t("popup_out_confirmed") : t("popup_out_unconfirmed"));
+    const reportsHere = (byCell[key] || []).slice().sort((a, b) => (a.uid || "").localeCompare(b.uid || ""));
+    const n = reportsHere.length || 1;
+
     const meta = t("popup_reports", {
       out: c.out, outS: c.out === 1 ? "" : "s",
       on: c.on, onS: c.on === 1 ? "" : "s",
       time: timeAgo(c.lastUpdate)
     });
-    marker.bindPopup(`
-      <p class="popup-title">${title}</p>
-      <p class="popup-meta">${meta}</p>
-      <button class="popup-btn" data-action="still-out" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_still_out")}</button>
-      <button class="popup-btn safe" data-action="its-on" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_power_back")}</button>
-    `);
-    marker.on("popupopen", () => bindPopupButtons());
-    marker.addTo(reportLayer);
+
+    reportsHere.forEach((r, i) => {
+      const { dLat, dLng } = offsetForIndex(i, n);
+      const lat = c.lat + dLat;
+      const lng = c.lng + dLng;
+
+      const isOut = r.type === "out";
+      const cls = isOut ? (c.out >= 2 ? "out" : "out-weak") : "on";
+      const label = isOut ? "⚡" : "✓";
+
+      const marker = L.marker([lat, lng], { icon: makeDivIcon(cls, label) });
+      const title = isOut
+        ? (c.out >= 2 ? t("popup_out_confirmed") : t("popup_out_unconfirmed"))
+        : t("popup_on");
+
+      marker.bindPopup(`
+        <p class="popup-title">${title}</p>
+        <p class="popup-meta">${meta}</p>
+        <button class="popup-btn" data-action="still-out" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_still_out")}</button>
+        <button class="popup-btn safe" data-action="its-on" data-lat="${c.lat}" data-lng="${c.lng}">${t("popup_power_back")}</button>
+      `);
+      marker.on("popupopen", () => bindPopupButtons());
+      marker.addTo(reportLayer);
+    });
+
+    // Fallback: if for some reason we have aggregate data but no matching
+    // raw docs (e.g. race on first load), still show one summary marker.
+    if (reportsHere.length === 0) {
+      const cls = cellIsOut ? (c.out >= 2 ? "out" : "out-weak") : "on";
+      const marker = L.marker([c.lat, c.lng], { icon: makeDivIcon(cls, cellIsOut ? c.out : "✓") });
+      marker.bindPopup(`<p class="popup-title">${cellIsOut ? t("popup_out_confirmed") : t("popup_on")}</p><p class="popup-meta">${meta}</p>`);
+      marker.addTo(reportLayer);
+    }
   }
   document.getElementById("statDark").textContent = darkZones;
 }
@@ -652,12 +703,15 @@ function wireUI() {
 
   document.getElementById("sosDetailClose").onclick = closeSOSDetail;
 
+  const TAB_PANEL_IDS = { legend: "tabLegend", outages: "tabOutages", sos: "tabSOS" };
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.onclick = () => {
       document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
       document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
       btn.classList.add("active");
-      document.getElementById("tab" + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add("active");
+      const panelId = TAB_PANEL_IDS[btn.dataset.tab];
+      const panel = panelId && document.getElementById(panelId);
+      if (panel) panel.classList.add("active");
       if (btn.dataset.tab === "sos") renderSOSList();
       if (btn.dataset.tab === "outages") renderOutagesTable();
     };
