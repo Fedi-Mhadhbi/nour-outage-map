@@ -320,10 +320,20 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 .popup-btn.help{ background: var(--sos); color:#0B1220; }
 .popup-btn.safe{ background: var(--on); color:#0B1220; }
 .popup-btn.remove{
-  background: var(--surface-2);
+  display: block;
+  background: transparent;
   color: var(--text-muted);
   border: 1px solid var(--border);
-  margin-top: 4px;
+  margin: 8px 0 0;
+  padding: 5px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.popup-btn.remove:hover{
+  color: var(--out);
+  border-color: var(--out);
+  background: rgba(230,57,70,0.08);
 }
 
 /* ---------- FABs ---------- */
