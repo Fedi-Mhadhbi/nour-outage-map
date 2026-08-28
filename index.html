@@ -39,6 +39,11 @@
       </div>
     </div>
 
+    <div class="service-switch" id="serviceSwitch">
+      <button class="service-btn active" data-service="power" data-i18n="service_power">⚡ Power</button>
+      <button class="service-btn" data-service="water" data-i18n="service_water">💧 Water</button>
+    </div>
+
     <div class="lang-switch" id="langSwitch">
       <button class="lang-btn" data-lang="en">EN</button>
       <button class="lang-btn" data-lang="fr">FR</button>
@@ -63,8 +68,8 @@
 
   <!-- Floating action buttons -->
   <div id="fabRow">
-    <button id="fabReportOut" class="fab fab-out" data-i18n="fab_out">⚡ No power here</button>
-    <button id="fabReportOn" class="fab fab-on" data-i18n="fab_on">✅ Power's back</button>
+    <button id="fabReportOut" class="fab fab-out">⚡ No power here</button>
+    <button id="fabReportOn" class="fab fab-on">✅ Power's back</button>
     <button id="fabSOS" class="fab fab-sos" data-i18n="fab_sos">🆘 Medical SOS</button>
   </div>
 
@@ -83,10 +88,11 @@
 
     <!-- Legend + feed tab -->
     <div class="tab-panel active" id="tabLegend">
+      <p class="panel-hint" id="legendShowing"></p>
       <div class="legend">
-        <div class="legend-row"><span class="dot dot-out"></span> <span data-i18n="legend_out_confirmed">Power out (confirmed by multiple reports)</span></div>
-        <div class="legend-row"><span class="dot dot-out-weak"></span> <span data-i18n="legend_out_unconfirmed">Power out (unconfirmed, 1 report)</span></div>
-        <div class="legend-row"><span class="dot dot-on"></span> <span data-i18n="legend_on">Power confirmed back on</span></div>
+        <div class="legend-row" id="legendOutConfirmedRow"><span class="dot dot-out"></span> <span data-i18n="legend_out_confirmed">Out (confirmed by multiple reports)</span></div>
+        <div class="legend-row" id="legendOutUnconfirmedRow"><span class="dot dot-out-weak"></span> <span data-i18n="legend_out_unconfirmed">Out (unconfirmed, 1 report)</span></div>
+        <div class="legend-row"><span class="dot dot-on"></span> <span data-i18n="legend_on">Confirmed back on</span></div>
         <div class="legend-row"><span class="dot dot-sos"></span> <span data-i18n="legend_sos">Active medical SOS nearby</span></div>
       </div>
 
@@ -114,13 +120,14 @@
         <thead>
           <tr>
             <th data-i18n="table_area">Area</th>
+            <th data-i18n="table_service">Service</th>
             <th data-i18n="table_status">Status</th>
             <th data-i18n="table_updated">Updated</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="outagesTableBody">
-          <tr><td colspan="4" class="table-empty" data-i18n="table_empty">No reports yet.</td></tr>
+          <tr><td colspan="5" class="table-empty" data-i18n="table_empty">No reports yet.</td></tr>
         </tbody>
       </table>
     </div>
@@ -148,11 +155,14 @@
         <button class="chip" data-reason="other" data-i18n="reason_other">Other emergency</button>
       </div>
 
-      <label class="field-label" for="sosNote" data-i18n="sos_note_label">Optional note (visible to helpers)</label>
-      <textarea id="sosNote" maxlength="140" data-i18n-placeholder="sos_note_placeholder" placeholder="e.g. 3rd floor, blue door, ring twice"></textarea>
+      <label class="field-label" data-i18n="sos_urgency_label">How urgent is it?</label>
+      <div class="chip-row" id="sosUrgencyChips">
+        <button class="chip selected" data-urgency="normal" data-i18n="sos_urgency_normal">🟡 Not urgent yet</button>
+        <button class="chip" data-urgency="urgent" data-i18n="sos_urgency_urgent">🔴 Urgent — within the hour</button>
+      </div>
 
-      <label class="field-label" for="sosContact" data-i18n="sos_contact_label">Optional contact info (only shown to people who tap "I can help")</label>
-      <input id="sosContact" type="text" maxlength="60" data-i18n-placeholder="sos_contact_placeholder" placeholder="Phone number or leave blank" />
+      <label class="field-label" for="sosNote" data-i18n="sos_note_label">Optional note (visible to helpers — address hint helps)</label>
+      <textarea id="sosNote" maxlength="140" data-i18n-placeholder="sos_note_placeholder" placeholder="e.g. 3rd floor, blue door, near the blue mosque"></textarea>
 
       <div class="sheet-actions">
         <button id="sosCancel" class="btn btn-ghost" data-i18n="sos_cancel">Cancel</button>
@@ -161,29 +171,55 @@
     </div>
   </div>
 
-  <!-- SOS detail + comments sheet -->
+  <!-- SOS detail + private messages sheet -->
   <div id="sosDetailOverlay" class="sheet-overlay hidden">
     <div class="sheet" id="sosDetailSheet">
       <div class="sheet-header-row">
+        <button id="sosThreadBack" class="icon-btn hidden" aria-label="Back">←</button>
         <h2 id="sosDetailTitle">Emergency</h2>
-        <button id="sosDetailClose" class="icon-btn">✕</button>
+        <div class="sheet-header-actions">
+          <button id="sosFlagBtn" class="icon-btn hidden" data-i18n-title="sos_flag_tooltip" aria-label="Report">🚩</button>
+          <button id="sosDetailClose" class="icon-btn">✕</button>
+        </div>
       </div>
       <p class="popup-meta" id="sosDetailMeta"></p>
       <p class="popup-note" id="sosDetailNote"></p>
+
+      <div id="sosCheckinBanner" class="checkin-banner hidden">
+        <p data-i18n="sos_checkin_prompt">It's been a couple of hours since this SOS was sent.</p>
+        <div class="checkin-actions">
+          <button id="checkinStillNeed" class="btn btn-ghost" data-i18n="sos_checkin_yes">Still need help</button>
+          <button id="checkinSafe" class="btn btn-on" data-i18n="sos_detail_mark_safe">I'm safe now</button>
+        </div>
+      </div>
+
       <div id="sosDetailOwnerActions" class="hidden">
         <button id="sosDetailMarkSafe" class="btn btn-danger" style="width:100%;" data-i18n="sos_detail_mark_safe">I'm safe now</button>
       </div>
 
-      <div class="comment-thread">
-        <h3 data-i18n="sos_detail_messages">Messages</h3>
-        <ul id="commentList" class="comment-list">
-          <li class="feed-empty" data-i18n="sos_detail_no_messages">No messages yet.</li>
-        </ul>
+      <!-- Owner: list of private helper threads -->
+      <div id="threadsListWrap" class="hidden">
+        <div class="panel-section" style="margin-top:16px;">
+          <h3 data-i18n="sos_detail_helpers_title">People reaching out</h3>
+          <ul id="threadsList" class="thread-list">
+            <li class="feed-empty" data-i18n="sos_no_helpers_yet">No one has messaged yet.</li>
+          </ul>
+        </div>
       </div>
 
-      <div class="comment-input-row">
-        <input id="commentInput" type="text" maxlength="200" data-i18n-placeholder="comment_placeholder" placeholder="e.g. I can help, call me at 55 123 456" />
-        <button id="commentSend" class="btn btn-danger" data-i18n="comment_send">Send</button>
+      <!-- Active 1-on-1 private thread -->
+      <div id="threadWrap" class="hidden">
+        <div class="comment-thread">
+          <h3 data-i18n="sos_detail_messages">Messages</h3>
+          <ul id="commentList" class="comment-list">
+            <li class="feed-empty" data-i18n="sos_thread_empty">No messages yet.</li>
+          </ul>
+        </div>
+
+        <div class="comment-input-row">
+          <input id="commentInput" type="text" maxlength="200" data-i18n-placeholder="comment_placeholder" placeholder="Type a private message…" />
+          <button id="commentSend" class="btn btn-danger" data-i18n="comment_send">Send</button>
+        </div>
       </div>
     </div>
   </div>

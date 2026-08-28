@@ -10,7 +10,10 @@
   --on-weak: rgba(61,220,151,0.35);
   --out: #E63946;
   --out-weak: rgba(230,57,70,0.35);
+  --water-out: #2E9BE6;
+  --water-out-weak: rgba(46,155,230,0.35);
   --sos: #FFB800;
+  --sos-urgent: #FF4B4B;
 
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -107,6 +110,30 @@ html,body{
   cursor:pointer;
 }
 .lang-btn.active{ background: var(--sos); color: #0B1220; }
+
+/* ---------- Service switcher (power / water) ---------- */
+.service-switch{
+  display:flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.service-btn{
+  background:none;
+  border:none;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 7px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.service-btn.active{ background: var(--out); color: #fff; }
+.service-btn[data-service="water"].active{ background: #2E9BE6; color:#fff; }
 
 /* ---------- RTL layout ---------- */
 body.rtl{ direction: rtl; }
@@ -241,15 +268,27 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 .nour-dot.out{ background: var(--out); box-shadow: 0 0 14px var(--out); }
 .nour-dot.out-weak{ background: var(--out-weak); color: var(--out); border: 1.5px solid var(--out); }
 .nour-dot.on{ background: var(--on); box-shadow: 0 0 10px var(--on); }
+.nour-dot.water-out{ background: var(--water-out); box-shadow: 0 0 14px var(--water-out); }
+.nour-dot.water-out-weak{ background: var(--water-out-weak); color: var(--water-out); border: 1.5px solid var(--water-out); }
 .nour-dot.sos{
   background: var(--sos);
   box-shadow: 0 0 0 6px rgba(255,184,0,0.25);
   animation: pulse 1.6s infinite;
 }
+.nour-dot.sos.urgent{
+  background: var(--sos-urgent);
+  box-shadow: 0 0 0 6px rgba(255,75,75,0.28);
+  animation: pulse-urgent 1.1s infinite;
+}
 @keyframes pulse{
   0%{ box-shadow: 0 0 0 0 rgba(255,184,0,0.55); }
   70%{ box-shadow: 0 0 0 16px rgba(255,184,0,0); }
   100%{ box-shadow: 0 0 0 0 rgba(255,184,0,0); }
+}
+@keyframes pulse-urgent{
+  0%{ box-shadow: 0 0 0 0 rgba(255,75,75,0.65); }
+  70%{ box-shadow: 0 0 0 18px rgba(255,75,75,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(255,75,75,0); }
 }
 
 .leaflet-popup-content-wrapper{
@@ -300,6 +339,7 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   white-space:nowrap;
 }
 .fab-out{ background: var(--out); color:#fff; }
+.fab-out.fab-water{ background: var(--water-out); }
 .fab-on{ background: var(--on); color:#06251A; }
 .fab-sos{ background: var(--sos); color:#0B1220; }
 .fab:active{ transform: scale(0.97); }
@@ -330,6 +370,8 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 .dot-out-weak{ background: transparent; border:1.5px solid var(--out); }
 .dot-on{ background: var(--on); }
 .dot-sos{ background: var(--sos); box-shadow: 0 0 6px var(--sos); }
+.dot-water-out{ background: var(--water-out); box-shadow: 0 0 6px var(--water-out); }
+.dot-water-out-weak{ background: transparent; border:1.5px solid var(--water-out); }
 
 .panel-section{ margin-bottom: 22px; }
 .panel-section h3{ font-family: var(--font-display); font-size:13px; text-transform:uppercase; letter-spacing:0.5px; color: var(--text-muted); margin: 0 0 10px; }
@@ -423,10 +465,68 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   cursor:pointer;
 }
 .sos-item:hover{ border-color: var(--sos); }
-.sos-item-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
-.sos-item-reason{ font-weight:600; font-size:13px; }
-.sos-item-dist{ font-family: var(--font-mono); font-size: 11px; color: var(--sos); }
+.sos-item.urgent{ border-color: var(--sos-urgent); }
+.sos-item-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; gap:8px; }
+.sos-item-reason{ font-weight:600; font-size:13px; display:flex; align-items:center; gap:6px; }
+.sos-item-dist{ font-family: var(--font-mono); font-size: 11px; color: var(--sos); white-space:nowrap; }
 .sos-item-meta{ font-size: 11.5px; color: var(--text-muted); }
+.urgent-badge{
+  background: var(--sos-urgent);
+  color:#fff;
+  font-size: 9.5px;
+  font-weight:700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.4px;
+}
+
+/* ---------- Thread list (owner's view of helpers) ---------- */
+.thread-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.thread-item{
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.thread-item:hover{ border-color: var(--sos); }
+.thread-item-preview{ font-size: 12.5px; color: var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.thread-item-time{ font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); white-space:nowrap; }
+
+/* ---------- Check-in banner ---------- */
+.checkin-banner{
+  background: rgba(255,184,0,0.1);
+  border: 1px solid var(--sos);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 12px 0;
+}
+.checkin-banner p{ margin: 0 0 8px; font-size: 13px; }
+.checkin-actions{ display:flex; gap:8px; }
+.checkin-actions .btn{ padding: 8px 10px; font-size: 12.5px; }
+
+/* ---------- Sheet header actions / comments own-message delete ---------- */
+.sheet-header-actions{ display:flex; align-items:center; gap:6px; }
+.comment-list li{ position:relative; }
+.comment-list li.own{ background: rgba(255,184,0,0.08); border-color: var(--sos); }
+.comment-delete-btn{
+  background:none;
+  border:none;
+  color: var(--text-muted);
+  cursor:pointer;
+  font-size: 12px;
+  position:absolute;
+  top: 6px;
+  right: 8px;
+  padding: 0;
+}
+body.rtl .comment-delete-btn{ right:auto; left:8px; }
+.comment-list li{ padding-right: 26px; }
+body.rtl .comment-list li{ padding-right: 10px; padding-left: 26px; }
 
 /* ---------- Comment thread ---------- */
 .sheet-header-row{ display:flex; align-items:center; justify-content:space-between; }
