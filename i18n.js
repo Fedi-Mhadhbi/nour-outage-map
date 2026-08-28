@@ -86,12 +86,13 @@ export const translations = {
     sos_no_helpers_yet: "No one has messaged yet. Helpers who reach out will show up here, each in their own private thread.",
     sos_thread_empty: "No messages yet — say hello and offer to help. Only you and this person can see this thread.",
     sos_thread_back: "Back",
-    sos_flag_tooltip: "Report this SOS",
+    sos_flag_tooltip: "Report as fake emergency",
+    sos_flag_confirm: "Report this as a fake or abusive emergency? After a few reports it gets hidden from the map. Only use this if you believe it isn't real.",
 
     sos_checkin_prompt: "It's been a couple of hours since this SOS was sent.",
     sos_checkin_yes: "Still need help",
 
-    toast_flag_sent: "Reported. Thanks for helping keep this trustworthy.",
+    toast_flag_sent: "Reported as fake. Thanks for helping keep this trustworthy.",
     toast_flag_already: "You've already reported this one.",
     toast_checkin_ack: "Thanks — still marked active.",
     toast_sos_cooldown: "Please wait a couple of minutes before sending another SOS.",
@@ -225,12 +226,13 @@ export const translations = {
     sos_no_helpers_yet: "Personne n'a encore écrit. Les aidants apparaîtront ici, chacun dans son propre fil privé.",
     sos_thread_empty: "Aucun message pour l'instant — dites bonjour et proposez votre aide. Vous seuls voyez ce fil.",
     sos_thread_back: "Retour",
-    sos_flag_tooltip: "Signaler ce SOS",
+    sos_flag_tooltip: "Signaler comme fausse urgence",
+    sos_flag_confirm: "Signaler ceci comme une fausse urgence ou un abus ? Après plusieurs signalements, l'alerte est masquée de la carte. N'utilisez cela que si vous pensez qu'elle n'est pas réelle.",
 
     sos_checkin_prompt: "Cela fait quelques heures depuis l'envoi de ce SOS.",
     sos_checkin_yes: "Toujours besoin d'aide",
 
-    toast_flag_sent: "Signalé. Merci de nous aider à garder cette liste fiable.",
+    toast_flag_sent: "Signalé comme faux. Merci de nous aider à garder cette liste fiable.",
     toast_flag_already: "Vous avez déjà signalé cette alerte.",
     toast_checkin_ack: "Merci — toujours marqué actif.",
     toast_sos_cooldown: "Merci d'attendre quelques minutes avant d'envoyer un autre SOS.",
@@ -364,12 +366,13 @@ export const translations = {
     sos_no_helpers_yet: "لم يتواصل أحد بعد. سيظهر المساعدون هنا، كل واحد في محادثته الخاصة.",
     sos_thread_empty: "لا توجد رسائل بعد — قل مرحبًا واعرض مساعدتك. أنتما فقط من يرى هذه المحادثة.",
     sos_thread_back: "رجوع",
-    sos_flag_tooltip: "الإبلاغ عن هذه الاستغاثة",
+    sos_flag_tooltip: "الإبلاغ عن استغاثة وهمية",
+    sos_flag_confirm: "هل تريد الإبلاغ عن هذه الاستغاثة كوهمية أو مسيئة؟ بعد عدة بلاغات يتم إخفاؤها من الخريطة. استخدم هذا فقط إذا كنت تعتقد أنها ليست حقيقية.",
 
     sos_checkin_prompt: "مرت بضع ساعات منذ إرسال هذه الاستغاثة.",
     sos_checkin_yes: "ما زلت بحاجة للمساعدة",
 
-    toast_flag_sent: "تم الإبلاغ. شكرًا لمساعدتنا في الحفاظ على الموثوقية.",
+    toast_flag_sent: "تم الإبلاغ كوهمية. شكرًا لمساعدتنا في الحفاظ على الموثوقية.",
     toast_flag_already: "لقد أبلغت عن هذه الاستغاثة من قبل.",
     toast_checkin_ack: "شكرًا — لا تزال مُعلّمة كنشطة.",
     toast_sos_cooldown: "الرجاء الانتظار بضع دقائق قبل إرسال استغاثة أخرى.",

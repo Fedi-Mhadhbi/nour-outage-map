@@ -74,6 +74,18 @@ function showToast(msg, ms = 3200) {
   clearTimeout(showToast._h);
   showToast._h = setTimeout(() => el.classList.add("hidden"), ms);
 }
+// The topbar's height changes with viewport width (it wraps to 3 rows on
+// mobile), font-load timing, and which language is active (French/Arabic
+// labels run longer than English ones). A fixed pixel offset for the
+// search bar drifts out of sync with all of that, so measure the topbar's
+// real rendered height instead and position the search bar right below it.
+function positionSearchBar() {
+  const topbar = document.getElementById("topbar");
+  const searchWrap = document.getElementById("searchWrap");
+  if (!topbar || !searchWrap) return;
+  const height = topbar.getBoundingClientRect().height;
+  searchWrap.style.top = `${Math.round(height) + 10}px`;
+}
 function getLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("no geolocation"));
@@ -271,6 +283,7 @@ function wireServiceSwitch() {
       updateServiceUI();
       renderMapMarkers();
       renderOutagesTable();
+      requestAnimationFrame(positionSearchBar);
     };
   });
 }
@@ -769,6 +782,11 @@ async function flagSOS(sosId, alreadyFlagged) {
     showToast(t("toast_flag_already"));
     return;
   }
+  // Flagging is what eventually hides someone's emergency from the map
+  // (see SOS_FLAG_HIDE_THRESHOLD), so require a deliberate confirmation
+  // rather than acting on a single accidental tap.
+  const confirmed = window.confirm(t("sos_flag_confirm"));
+  if (!confirmed) return;
   try {
     await updateDoc(doc(db, "sos", sosId), { flags: increment(1), flaggedBy: arrayUnion(uid) });
     showToast(t("toast_flag_sent"));
@@ -894,6 +912,9 @@ function wireLangSwitch() {
       renderFeed(lastReportDocs);
       renderOutagesTable();
       renderSOSList();
+      // Different languages have different label lengths, which can
+      // change how many lines the topbar wraps to.
+      requestAnimationFrame(positionSearchBar);
     };
   });
   refreshActive();
@@ -997,6 +1018,15 @@ async function boot() {
   updateServiceUI();
   subscribeReports();
   subscribeSOS();
+
+  positionSearchBar();
+  window.addEventListener("resize", positionSearchBar);
+  window.addEventListener("orientationchange", () => setTimeout(positionSearchBar, 200));
+  // Fonts (Space Grotesk / Noto Sans Arabic) can finish loading after first
+  // paint and change the topbar's height slightly — re-measure once they're in.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(positionSearchBar).catch(() => {});
+  }
 
   getLocation().catch(() => {});
 

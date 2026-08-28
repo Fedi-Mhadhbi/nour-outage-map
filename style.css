@@ -645,21 +645,27 @@ textarea{ height: 64px; }
   #topbar{
     display: grid;
     grid-template-columns: 1fr auto;
+    column-gap: 14px;
     grid-template-areas:
       "brand   menu"
       "stats   stats"
       "service lang";
-    row-gap: 10px;
+    row-gap: 12px;
     align-items: center;
     padding: 12px 14px 10px;
   }
-  .brand{ grid-area: brand; }
+  .brand{ grid-area: brand; min-width: 0; }
   #menuToggle{ grid-area: menu; justify-self: end; align-self: start; }
   .stats{ grid-area: stats; justify-content: center; gap: 28px; }
   #serviceSwitch{ grid-area: service; justify-self: end; }
   #langSwitch{ grid-area: lang; justify-self: start; }
 
-  #searchWrap{ top: 148px; }
+  /* #searchWrap's top offset is set from JS (positionSearchBar()), which
+     measures the topbar's real rendered height — it varies with font
+     load timing and how long the active language's labels are, so a
+     fixed pixel guess here would drift out of sync and either overlap
+     the switches or leave a gap. This is just the pre-JS fallback. */
+  #searchWrap{ top: 158px; }
 
   body.rtl #topbar{
     grid-template-columns: auto 1fr;
@@ -679,7 +685,6 @@ textarea{ height: 64px; }
   .fab{ font-size:13px; padding: 10px 14px; }
   .stats{ gap:20px; }
   .stat{ min-width: 52px; }
-  #searchWrap{ top: 140px; }
   .search-box{ padding: 9px 10px; }
   #panel{ width: min(360px, 92vw); padding: 16px 14px; }
   .sheet{ padding: 18px 16px 22px; }
