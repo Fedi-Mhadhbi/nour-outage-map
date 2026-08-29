@@ -143,6 +143,21 @@ export const translations = {
     install_button_short: "Install",
     toast_ios_install_hint: "To install: tap the Share icon, then \"Add to Home Screen\".",
 
+    table_history: "📊 History",
+
+    duration_minutes: "{m} min",
+    duration_hours: "{h}h",
+
+    history_loading: "Loading the last 7 days…",
+    history_noun_power: "power cuts",
+    history_noun_water: "water cuts",
+    history_zero: "No {noun} recorded here in the last {days} days.",
+    history_summary: "This area has had {count} {noun} in the last {days} days. Average length: {avg}.",
+    history_longest: "Longest one: {duration}, starting {date}.",
+    history_ongoing_note: "One of these is still going on right now.",
+    history_disclaimer: "Based on community reports, so it may not catch every outage — treat it as a helpful estimate, not an official record.",
+    history_error: "Couldn't load history right now — check your connection.",
+
     feed_out_reported_power: "⚡ Power out reported",
     feed_on_reported_power: "✅ Power restored reported",
     feed_out_reported_water: "💧 Water cut reported",
@@ -289,6 +304,21 @@ export const translations = {
     install_button_short: "Installer",
     toast_ios_install_hint: "Pour installer : appuyez sur l'icône Partager, puis « Sur l'écran d'accueil ».",
 
+    table_history: "📊 Historique",
+
+    duration_minutes: "{m} min",
+    duration_hours: "{h}h",
+
+    history_loading: "Chargement des 7 derniers jours…",
+    history_noun_power: "coupures de courant",
+    history_noun_water: "coupures d'eau",
+    history_zero: "Pas de {noun} enregistrées ici ces {days} derniers jours.",
+    history_summary: "Cette zone a eu {count} {noun} ces {days} derniers jours. Durée moyenne : {avg}.",
+    history_longest: "La plus longue : {duration}, à partir de {date}.",
+    history_ongoing_note: "L'une d'elles est toujours en cours en ce moment.",
+    history_disclaimer: "Basé sur les signalements de la communauté — certaines coupures peuvent manquer. À prendre comme une estimation utile, pas un registre officiel.",
+    history_error: "Impossible de charger l'historique — vérifiez votre connexion.",
+
     feed_out_reported_power: "⚡ Coupure de courant signalée",
     feed_on_reported_power: "✅ Retour du courant signalé",
     feed_out_reported_water: "💧 Coupure d'eau signalée",
@@ -434,6 +464,21 @@ export const translations = {
     locate_me_tooltip: "تحديد موقعي",
     install_button_short: "تثبيت",
     toast_ios_install_hint: "للتثبيت: اضغط على أيقونة المشاركة، ثم \"إضافة إلى الشاشة الرئيسية\".",
+
+    table_history: "📊 السجل",
+
+    duration_minutes: "{m} د",
+    duration_hours: "{h} سا",
+
+    history_loading: "جارٍ تحميل بيانات آخر 7 أيام…",
+    history_noun_power: "انقطاعات كهرباء",
+    history_noun_water: "انقطاعات ماء",
+    history_zero: "لا توجد {noun} مسجلة هنا في آخر {days} أيام.",
+    history_summary: "شهدت هذه المنطقة {count} {noun} في آخر {days} أيام. المدة المتوسطة: {avg}.",
+    history_longest: "الأطول: {duration}، بدءًا من {date}.",
+    history_ongoing_note: "أحد هذه الانقطاعات لا يزال مستمرًا الآن.",
+    history_disclaimer: "استنادًا إلى بلاغات المجتمع، قد لا تشمل كل الانقطاعات — اعتبرها تقديرًا مفيدًا وليست سجلًا رسميًا.",
+    history_error: "تعذّر تحميل السجل — تحقق من اتصالك.",
 
     feed_out_reported_power: "⚡ تم الإبلاغ عن انقطاع الكهرباء",
     feed_on_reported_power: "✅ تم الإبلاغ عن عودة الكهرباء",

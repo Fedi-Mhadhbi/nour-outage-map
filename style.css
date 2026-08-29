@@ -367,6 +367,32 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 }
 .popup-btn.help{ background: var(--sos); color:#0B1220; }
 .popup-btn.safe{ background: var(--on); color:#0B1220; }
+
+/* ---------- Outage history sheet ---------- */
+.history-summary{
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 4px 0 14px;
+}
+.history-detail{
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+.history-ongoing{
+  color: var(--sos);
+  font-weight: 600;
+}
+.history-disclaimer{
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
 .popup-btn.remove{
   display: block;
   background: transparent;
@@ -513,15 +539,20 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   vertical-align: middle;
 }
 .data-table .status-cell{ display:flex; align-items:center; gap:6px; }
+.row-actions{ display:flex; flex-direction:column; gap:6px; min-width: 100px; }
 .data-table .row-btn{
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 7px;
-  padding: 5px 9px;
-  font-size: 11px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor:pointer;
+  width: 100%;
+  text-align: center;
 }
+.data-table .row-btn:hover{ background: var(--surface); border-color: var(--sos); }
 .table-empty{ color: var(--text-muted); font-style: italic; text-align:center; padding: 18px 0 !important; }
 
 /* ---------- SOS list ---------- */

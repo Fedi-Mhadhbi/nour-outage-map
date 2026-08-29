@@ -18,7 +18,7 @@
 <meta name="theme-color" content="#0B1220" />
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
-<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Nour" />
@@ -252,6 +252,17 @@
         <button id="searchConfirmOut" class="btn btn-danger" data-i18n="search_confirm_out">⚡ No power</button>
         <button id="searchConfirmOn" class="btn btn-on" data-i18n="search_confirm_on">✅ Power's back</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Outage history sheet -->
+  <div id="historyOverlay" class="sheet-overlay hidden">
+    <div class="sheet" id="historySheet">
+      <div class="sheet-header-row">
+        <h2 id="historyTitle">Area</h2>
+        <button id="historyClose" class="icon-btn">✕</button>
+      </div>
+      <div id="historyBody"></div>
     </div>
   </div>
 

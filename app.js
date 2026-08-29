@@ -2,7 +2,7 @@ import { db, auth, authReady } from "./firebase-config.js";
 import {
   collection, doc, setDoc, updateDoc, onSnapshot,
   query, where, orderBy, Timestamp, serverTimestamp, increment, arrayUnion,
-  deleteDoc, addDoc
+  deleteDoc, addDoc, getDocs
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { t, setLang, currentLang, applyStaticTranslations } from "./i18n.js";
 
@@ -392,6 +392,19 @@ async function submitReport(type, lat, lng, service) {
       updatedAt: serverTimestamp()
     });
     localStorage.setItem(lastCellStorageKey, key);
+
+    // Separate, append-only historical record — never overwritten or
+    // editable, unlike the live "reports" doc above. This is what powers
+    // the outage-history stats; the live doc alone can't, since it only
+    // ever holds this device's *current* status for the cell.
+    try {
+      await addDoc(collection(db, "report_events"), {
+        cell: key, service: svc, type, uid, createdAt: serverTimestamp()
+      });
+    } catch (logErr) {
+      // Never let a history-logging failure block the actual live report.
+      console.error("history log failed:", logErr);
+    }
   } catch (err) {
     console.error(err);
     showToast(t("toast_report_failed"));
@@ -610,7 +623,12 @@ function renderOutagesTable() {
         </span>
       </td>
       <td>${timeAgo(r.updatedAt)}</td>
-      <td><button class="row-btn" data-goto-lat="${r.lat}" data-goto-lng="${r.lng}" data-goto-service="${r.service}">${t("table_view")}</button></td>
+      <td>
+        <div class="row-actions">
+          <button class="row-btn" data-goto-lat="${r.lat}" data-goto-lng="${r.lng}" data-goto-service="${r.service}">${t("table_view")}</button>
+          <button class="row-btn" data-history-cell="${r.cell}" data-history-service="${r.service}" data-history-lat="${r.lat}" data-history-lng="${r.lng}">${t("table_history")}</button>
+        </div>
+      </td>
     </tr>
   `).join("");
 
@@ -647,6 +665,114 @@ function renderOutagesTable() {
       }, 900);
     };
   });
+
+  body.querySelectorAll("[data-history-cell]").forEach((btn) => {
+    btn.onclick = () => {
+      openHistorySheet(
+        btn.dataset.historyCell, btn.dataset.historyService,
+        parseFloat(btn.dataset.historyLat), parseFloat(btn.dataset.historyLng)
+      );
+    };
+  });
+}
+
+// ---------------------------------------------------------------
+// Outage history — reconstructs past outage "sessions" for one area from
+// the append-only report_events log, and shows a plain-language summary.
+// This is intentionally a simple heuristic, not precise analytics: it
+// walks the combined community timeline for this spot and treats the
+// first "out" report as a session starting, the following "on" report as
+// it ending. Good enough to spot real patterns without needing anyone to
+// read a chart.
+// ---------------------------------------------------------------
+const HISTORY_WINDOW_DAYS = 7;
+
+function reconstructSessions(events) {
+  const sessions = [];
+  let ongoing = null;
+  for (const ev of events) {
+    if (ev.type === "out" && !ongoing) {
+      ongoing = { start: ev.createdAt };
+    } else if (ev.type === "on" && ongoing) {
+      sessions.push({ start: ongoing.start, end: ev.createdAt, ongoing: false });
+      ongoing = null;
+    }
+  }
+  if (ongoing) sessions.push({ start: ongoing.start, end: null, ongoing: true });
+  return sessions;
+}
+
+function formatDuration(ms) {
+  const hours = ms / 3600000;
+  if (hours < 1) return t("duration_minutes", { m: Math.max(1, Math.round(ms / 60000)) });
+  return t("duration_hours", { h: Math.round(hours * 10) / 10 });
+}
+
+function formatSessionDate(ts) {
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString(currentLang === "ar" ? "ar-TN" : currentLang, { weekday: "long", hour: "2-digit", minute: "2-digit" });
+}
+
+async function openHistorySheet(cell, service, lat, lng) {
+  const overlay = document.getElementById("historyOverlay");
+  const body = document.getElementById("historyBody");
+  const titleEl = document.getElementById("historyTitle");
+  overlay.classList.remove("hidden");
+  titleEl.textContent = t("locating");
+  body.innerHTML = `<p class="panel-hint">${t("history_loading")}</p>`;
+
+  requestReverseGeocode(cell, lat, lng, (label) => { titleEl.textContent = label; });
+
+  try {
+    const cutoff = Timestamp.fromDate(new Date(Date.now() - HISTORY_WINDOW_DAYS * 24 * 3600 * 1000));
+    const q = query(
+      collection(db, "report_events"),
+      where("cell", "==", cell),
+      where("service", "==", service),
+      where("createdAt", ">=", cutoff),
+      orderBy("createdAt", "asc")
+    );
+    const snap_ = await getDocs(q);
+    const events = [];
+    snap_.forEach((d) => events.push(d.data()));
+
+    const sessions = reconstructSessions(events);
+    const closedSessions = sessions.filter((s) => !s.ongoing);
+
+    if (sessions.length === 0) {
+      body.innerHTML = `<p class="history-summary">${t("history_zero", { days: HISTORY_WINDOW_DAYS, noun: t(`history_noun_${service}`) })}</p>`;
+      return;
+    }
+
+    const durations = closedSessions.map((s) => s.end.toMillis() - s.start.toMillis());
+    const avgMs = durations.length ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+    const maxSession = closedSessions.length
+      ? closedSessions.reduce((a, b) => ((b.end.toMillis() - b.start.toMillis()) > (a.end.toMillis() - a.start.toMillis()) ? b : a))
+      : null;
+
+    let html = `<p class="history-summary">${t("history_summary", {
+      count: sessions.length,
+      days: HISTORY_WINDOW_DAYS,
+      noun: t(`history_noun_${service}`),
+      avg: avgMs != null ? formatDuration(avgMs) : "—"
+    })}</p>`;
+
+    if (maxSession) {
+      html += `<p class="history-detail">${t("history_longest", {
+        duration: formatDuration(maxSession.end.toMillis() - maxSession.start.toMillis()),
+        date: formatSessionDate(maxSession.start)
+      })}</p>`;
+    }
+    if (sessions.some((s) => s.ongoing)) {
+      html += `<p class="history-detail history-ongoing">${t("history_ongoing_note")}</p>`;
+    }
+
+    html += `<p class="history-disclaimer">${t("history_disclaimer")}</p>`;
+    body.innerHTML = html;
+  } catch (err) {
+    console.error("history query failed:", err);
+    body.innerHTML = `<p class="panel-hint">${t("history_error")}</p>`;
+  }
 }
 
 // ---------------------------------------------------------------
@@ -1079,6 +1205,10 @@ function wireUI() {
   wireSearch();
   wireLangSwitch();
   wireServiceSwitch();
+
+  document.getElementById("historyClose").onclick = () => {
+    document.getElementById("historyOverlay").classList.add("hidden");
+  };
 
   document.getElementById("searchConfirmCancel").onclick = () => {
     document.getElementById("searchConfirmOverlay").classList.add("hidden");
