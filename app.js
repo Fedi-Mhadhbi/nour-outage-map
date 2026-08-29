@@ -26,23 +26,21 @@ let unsubscribeReports = null;
 let unsubscribeSOS = null;
 let unsubscribeThreadsList = null;
 let unsubscribeThreadMessages = null;
-let pendingReportType = null;      // 'out' | 'on' | null — set when waiting for a map tap
+let pendingReportType = null;     
 let selectedSOSReason = null;
-let selectedSOSUrgency = "normal"; // 'normal' | 'urgent'
+let selectedSOSUrgency = "normal"; 
 let mySOSDocId = null;
-let lastKnownLocation = null;      // {lat, lng} — used to sort the SOS list by distance
-let cellsData = {};                // latest aggregated outage cells (keyed "service_cell"), cached for table view
-let sosData = [];                  // latest active, non-expired, non-hidden SOS docs
+let lastKnownLocation = null;      
+let cellsData = {};               
+let sosData = [];                
 let outageFilter = "all";
 let activeSOSDetailId = null;
-let activeThreadHelperUid = null;  // which private thread is currently open
-let searchedLocation = null;       // {lat, lng, label} picked from the search bar
-let activeService = "power";       // 'power' | 'water' — what the FABs/map are currently reporting/showing
+let activeThreadHelperUid = null;  
+let searchedLocation = null;      
+let activeService = "power";      
 let checkinNudgedThisSession = false;
 
-// ---------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------
+
 function snap(lat, lng) {
   const f = Math.pow(10, GRID_PRECISION);
   return { lat: Math.round(lat * f) / f, lng: Math.round(lng * f) / f };
@@ -74,11 +72,7 @@ function showToast(msg, ms = 3200) {
   clearTimeout(showToast._h);
   showToast._h = setTimeout(() => el.classList.add("hidden"), ms);
 }
-// The topbar's height changes with viewport width (it wraps to 3 rows on
-// mobile), font-load timing, and which language is active (French/Arabic
-// labels run longer than English ones). A fixed pixel offset for the
-// search bar drifts out of sync with all of that, so measure the topbar's
-// real rendered height instead and position the search bar right below it.
+
 function positionSearchBar() {
   const topbar = document.getElementById("topbar");
   const searchWrap = document.getElementById("searchWrap");
@@ -105,14 +99,11 @@ function serviceLabel(service) {
   return t(`service_label_${service}`);
 }
 
-// ---------------------------------------------------------------
-// Reverse geocoding (cell -> human-readable area name), rate limited
-// ---------------------------------------------------------------
+
 const geocodeCache = {};
-const pendingCallbacks = {}; // cell -> callbacks waiting on it, so repeated
-                              // re-renders never queue a duplicate request
-                              // for a cell that's already in flight.
-const geocodeQueue = [];     // queue of unique cells only
+const pendingCallbacks = {}; 
+                              
+const geocodeQueue = [];    
 let geocodeBusy = false;
 
 function requestReverseGeocode(cell, lat, lng, cb) {
@@ -147,9 +138,7 @@ async function processGeocodeQueue() {
   setTimeout(() => { geocodeBusy = false; processGeocodeQueue(); }, 1100);
 }
 
-// ---------------------------------------------------------------
 // Forward geocoding (search bar)
-// ---------------------------------------------------------------
 let searchDebounceTimer = null;
 
 function wireSearch() {
@@ -160,9 +149,7 @@ function wireSearch() {
   const toggleBtn = document.getElementById("searchToggle");
   const collapseBtn = document.getElementById("searchCollapse");
 
-  // On mobile the search bar starts collapsed to a small icon so it
-  // doesn't sit on top of the map. Tapping it expands the full input;
-  // on desktop these buttons stay hidden via CSS and this is a no-op.
+
   if (toggleBtn) {
     toggleBtn.onclick = () => {
       wrap.classList.add("expanded");
@@ -245,15 +232,11 @@ function selectSearchResult(r) {
   document.getElementById("searchConfirmSub").textContent = t("search_confirm_sub");
   document.getElementById("searchConfirmOverlay").classList.remove("hidden");
 
-  // Collapse the mobile search icon back down now that a place was picked
-  // (no-op on desktop, where the search box is always shown inline).
   const wrap = document.getElementById("searchWrap");
   if (wrap) wrap.classList.remove("expanded");
 }
 
-// ---------------------------------------------------------------
-// Map setup
-// ---------------------------------------------------------------
+
 function initMap() {
   map = L.map("map", { zoomControl: true, attributionControl: true })
     .setView(TUNISIA_CENTER, DEFAULT_ZOOM);
@@ -286,9 +269,7 @@ function makeDivIcon(className, label) {
   });
 }
 
-// ---------------------------------------------------------------
 // Service switcher (power / water)
-// ---------------------------------------------------------------
 function updateServiceUI() {
   document.getElementById("fabReportOut").textContent = t(`fab_out_${activeService}`);
   document.getElementById("fabReportOn").textContent = t(`fab_on_${activeService}`);
@@ -317,12 +298,7 @@ function wireServiceSwitch() {
   });
 }
 
-// ---------------------------------------------------------------
-// Reports: submit
-// ---------------------------------------------------------------
-// Nour only tracks Tunisia — reports from far outside this box are rejected
-// so unrelated global testers/curious visitors can't pollute the map data.
-// Bounds are intentionally generous (covers the mainland plus Djerba/Kerkennah).
+
 const TUNISIA_BOUNDS = { minLat: 30.0, maxLat: 38.0, minLng: 7.0, maxLng: 12.0 };
 function isWithinTunisia(lat, lng) {
   return lat >= TUNISIA_BOUNDS.minLat && lat <= TUNISIA_BOUNDS.maxLat
@@ -341,9 +317,7 @@ async function submitReport(type, lat, lng, service) {
   const docId = `${uid}_${svc}_${key}`;
   const lastCellStorageKey = `nour_last_report_cell_${svc}`;
   try {
-    // If this device's last report for this service landed in a *different*
-    // nearby cell (GPS drift between visits, or reporting from phone vs PC),
-    // remove the old one so it doesn't keep showing a stale/contradicting status.
+
     const prevKey = localStorage.getItem(lastCellStorageKey);
     if (prevKey && prevKey !== key) {
       try { await deleteDoc(doc(db, "reports", `${uid}_${svc}_${prevKey}`)); } catch (e) { /* may not exist / may already be stale, ignore */ }
@@ -374,9 +348,7 @@ async function handleFabReport(type) {
 
 let lastReportDocs = [];
 
-// ---------------------------------------------------------------
-// Reports: live sync + clustering + render (map, table, feed)
-// ---------------------------------------------------------------
+
 function subscribeReports() {
   if (unsubscribeReports) unsubscribeReports();
   const cutoff = Timestamp.fromDate(new Date(Date.now() - STALE_HOURS * 3600 * 1000));
@@ -408,8 +380,7 @@ function aggregateAndRender(docs) {
   renderOutagesTable();
 }
 
-// Small deterministic offset so multiple reports at (near) the same spot
-// render as separate visible dots instead of stacking into one marker.
+
 function offsetForIndex(i, n) {
   if (n <= 1) return { dLat: 0, dLng: 0 };
   const radius = 0.0009; // ~90-100m ring around the true location
@@ -421,8 +392,7 @@ function renderMapMarkers() {
   reportLayer.clearLayers();
   let darkZones = 0;
 
-  // group the raw (per-user) reports by service+cell so every individual
-  // report gets its own marker, even when several land in the same grid cell
+  
   const byCell = {};
   for (const r of lastReportDocs) {
     if (!r.cell || !r.updatedAt) continue;
@@ -434,10 +404,7 @@ function renderMapMarkers() {
   for (const key in cellsData) {
     const c = cellsData[key];
     if (c.service !== activeService) continue;
-    // A cell renders red "out" markers on the map as soon as it has ANY out
-    // report (see the marker-coloring logic below, which never nets out
-    // reports against on reports) — so the "zones dark" stat has to use the
-    // same rule, or it reads 0 while a red marker is clearly visible.
+   
     const cellIsOut = c.out > 0;
     if (cellIsOut) darkZones++;
 
@@ -477,8 +444,7 @@ function renderMapMarkers() {
       marker.addTo(reportLayer);
     });
 
-    // Fallback: if for some reason we have aggregate data but no matching
-    // raw docs (e.g. race on first load), still show one summary marker.
+   
     if (reportsHere.length === 0) {
       const isWater = activeService === "water";
       const cls = cellIsOut ? (c.out >= 2 ? (isWater ? "water-out" : "out") : (isWater ? "water-out-weak" : "out-weak")) : "on";
@@ -539,8 +505,7 @@ function renderFeed(reportDocs) {
 function renderOutagesTable() {
   const body = document.getElementById("outagesTableBody");
 
-  // One row per individual report (not per grid cell), so the table
-  // matches what's now shown on the map — two nearby reports = two rows.
+
   const rows = lastReportDocs
     .filter((r) => r.cell && r.updatedAt)
     .map((r) => {
@@ -576,7 +541,6 @@ function renderOutagesTable() {
     </tr>
   `).join("");
 
-  // geocode once per cell, then fill in every row that shares that cell
   const seenCells = new Set();
   rows.forEach((r) => {
     if (seenCells.has(r.cell)) return;
@@ -611,9 +575,8 @@ function renderOutagesTable() {
   });
 }
 
-// ---------------------------------------------------------------
+
 // SOS: submit
-// ---------------------------------------------------------------
 function sosCooldownRemainingMs() {
   const until = parseInt(localStorage.getItem("nour_sos_cooldown_until") || "0", 10);
   return Math.max(0, until - Date.now());
@@ -685,9 +648,7 @@ async function markSafe(sosId) {
   }
 }
 
-// ---------------------------------------------------------------
 // SOS: live sync + render (map pins, list tab)
-// ---------------------------------------------------------------
 function subscribeSOS() {
   if (unsubscribeSOS) unsubscribeSOS();
   const q = query(collection(db, "sos"), where("active", "==", true));
@@ -765,7 +726,6 @@ function renderSOSList() {
   });
 }
 
-// Gently nudge someone whose own SOS has been active a while — once per session.
 function maybeNudgeCheckin() {
   if (checkinNudgedThisSession) return;
   const mine = sosData.find((s) => s.uid === uid);
@@ -777,10 +737,7 @@ function maybeNudgeCheckin() {
   }
 }
 
-// ---------------------------------------------------------------
-// SOS detail sheet: owner sees a list of private helper threads,
-// a helper goes straight into their own 1-on-1 thread with the owner.
-// ---------------------------------------------------------------
+
 function openSOSDetail(sosId) {
   const s = sosData.find((x) => x.id === sosId);
   if (!s) return;
@@ -838,9 +795,7 @@ async function flagSOS(sosId, alreadyFlagged) {
     showToast(t("toast_flag_already"));
     return;
   }
-  // Flagging is what eventually hides someone's emergency from the map
-  // (see SOS_FLAG_HIDE_THRESHOLD), so require a deliberate confirmation
-  // rather than acting on a single accidental tap.
+ 
   const confirmed = window.confirm(t("sos_flag_confirm"));
   if (!confirmed) return;
   try {
@@ -876,8 +831,7 @@ function subscribeThreadsList(sosId) {
   }, (err) => console.error("threads list subscribe error", err));
 }
 
-// Opens the 1-on-1 private thread between the SOS owner and one helper.
-// helperUid identifies the thread; only that helper and the SOS owner can see it.
+
 function openThread(sosId, helperUid, cameFromList) {
   activeThreadHelperUid = helperUid;
   document.getElementById("threadsListWrap").classList.add("hidden");
@@ -950,9 +904,7 @@ async function sendThreadMessage(sosId, helperUid, isOwner) {
   }
 }
 
-// ---------------------------------------------------------------
 // Language switching
-// ---------------------------------------------------------------
 function wireLangSwitch() {
   const buttons = document.querySelectorAll(".lang-btn");
   function refreshActive() {
@@ -976,9 +928,7 @@ function wireLangSwitch() {
   refreshActive();
 }
 
-// ---------------------------------------------------------------
-// UI wiring
-// ---------------------------------------------------------------
+
 function wireUI() {
   document.getElementById("fabReportOut").onclick = () => handleFabReport("out");
   document.getElementById("fabReportOn").onclick = () => handleFabReport("on");
@@ -1058,9 +1008,7 @@ function wireUI() {
   };
 }
 
-// ---------------------------------------------------------------
-// Boot
-// ---------------------------------------------------------------
+
 async function boot() {
   setLang(currentLang);
   applyStaticTranslations();
