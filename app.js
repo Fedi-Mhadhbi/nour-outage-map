@@ -82,9 +82,16 @@ function showToast(msg, ms = 3200) {
 function positionSearchBar() {
   const topbar = document.getElementById("topbar");
   const searchWrap = document.getElementById("searchWrap");
-  if (!topbar || !searchWrap) return;
+  if (!topbar) return;
   const height = topbar.getBoundingClientRect().height;
-  searchWrap.style.top = `${Math.round(height) + 10}px`;
+  if (searchWrap) searchWrap.style.top = `${Math.round(height) + 10}px`;
+
+  // Leaflet's own top-left controls (zoom +/-, locate-me) render inside the
+  // map itself and default to the very top-left corner of the screen — the
+  // same corner the topbar's brand/stats occupy. Push them down below the
+  // topbar so they're never visually or physically blocked by it.
+  const leafletTopLeft = document.querySelector(".leaflet-top.leaflet-left");
+  if (leafletTopLeft) leafletTopLeft.style.marginTop = `${Math.round(height) + 10}px`;
 }
 function getLocation() {
   return new Promise((resolve, reject) => {

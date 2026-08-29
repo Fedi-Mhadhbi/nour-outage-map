@@ -52,6 +52,9 @@ html,body{
   pointer-events:none;
 }
 #topbar > *{ pointer-events:auto; }
+/* The brand label and stat counters are purely decorative — they must never
+   intercept taps meant for the map controls that can sit visually near them. */
+.brand, .stats{ pointer-events: none; }
 
 .brand{ display:flex; align-items:center; gap:10px; }
 .bulb{
