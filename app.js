@@ -21,26 +21,28 @@ const SOS_COOLDOWN_MIN = 2;       // wait this long after resolving before sendi
 const SOS_FLAG_HIDE_THRESHOLD = 3; // hide an SOS from everyone but its owner after this many reports
 
 let uid = null;
-let map, reportLayer, sosLayer, searchMarker;
+let map, reportLayer, sosLayer, meLayer, searchMarker;
 let unsubscribeReports = null;
 let unsubscribeSOS = null;
 let unsubscribeThreadsList = null;
 let unsubscribeThreadMessages = null;
-let pendingReportType = null;     
+let pendingReportType = null;      // 'out' | 'on' | null — set when waiting for a map tap
 let selectedSOSReason = null;
-let selectedSOSUrgency = "normal"; 
+let selectedSOSUrgency = "normal"; // 'normal' | 'urgent'
 let mySOSDocId = null;
-let lastKnownLocation = null;      
-let cellsData = {};               
-let sosData = [];                
+let lastKnownLocation = null;      // {lat, lng} — used to sort the SOS list by distance
+let cellsData = {};                // latest aggregated outage cells (keyed "service_cell"), cached for table view
+let sosData = [];                  // latest active, non-expired, non-hidden SOS docs
 let outageFilter = "all";
 let activeSOSDetailId = null;
-let activeThreadHelperUid = null;  
-let searchedLocation = null;      
-let activeService = "power";      
+let activeThreadHelperUid = null;  // which private thread is currently open
+let searchedLocation = null;       // {lat, lng, label} picked from the search bar
+let activeService = "power";       // 'power' | 'water' — what the FABs/map are currently reporting/showing
 let checkinNudgedThisSession = false;
 
-
+// ---------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------
 function snap(lat, lng) {
   const f = Math.pow(10, GRID_PRECISION);
   return { lat: Math.round(lat * f) / f, lng: Math.round(lng * f) / f };
@@ -72,7 +74,11 @@ function showToast(msg, ms = 3200) {
   clearTimeout(showToast._h);
   showToast._h = setTimeout(() => el.classList.add("hidden"), ms);
 }
-
+// The topbar's height changes with viewport width (it wraps to 3 rows on
+// mobile), font-load timing, and which language is active (French/Arabic
+// labels run longer than English ones). A fixed pixel offset for the
+// search bar drifts out of sync with all of that, so measure the topbar's
+// real rendered height instead and position the search bar right below it.
 function positionSearchBar() {
   const topbar = document.getElementById("topbar");
   const searchWrap = document.getElementById("searchWrap");
@@ -99,11 +105,14 @@ function serviceLabel(service) {
   return t(`service_label_${service}`);
 }
 
-
+// ---------------------------------------------------------------
+// Reverse geocoding (cell -> human-readable area name), rate limited
+// ---------------------------------------------------------------
 const geocodeCache = {};
-const pendingCallbacks = {}; 
-                              
-const geocodeQueue = [];    
+const pendingCallbacks = {}; // cell -> callbacks waiting on it, so repeated
+                              // re-renders never queue a duplicate request
+                              // for a cell that's already in flight.
+const geocodeQueue = [];     // queue of unique cells only
 let geocodeBusy = false;
 
 function requestReverseGeocode(cell, lat, lng, cb) {
@@ -138,7 +147,9 @@ async function processGeocodeQueue() {
   setTimeout(() => { geocodeBusy = false; processGeocodeQueue(); }, 1100);
 }
 
+// ---------------------------------------------------------------
 // Forward geocoding (search bar)
+// ---------------------------------------------------------------
 let searchDebounceTimer = null;
 
 function wireSearch() {
@@ -149,7 +160,9 @@ function wireSearch() {
   const toggleBtn = document.getElementById("searchToggle");
   const collapseBtn = document.getElementById("searchCollapse");
 
-
+  // On mobile the search bar starts collapsed to a small icon so it
+  // doesn't sit on top of the map. Tapping it expands the full input;
+  // on desktop these buttons stay hidden via CSS and this is a no-op.
   if (toggleBtn) {
     toggleBtn.onclick = () => {
       wrap.classList.add("expanded");
@@ -232,11 +245,15 @@ function selectSearchResult(r) {
   document.getElementById("searchConfirmSub").textContent = t("search_confirm_sub");
   document.getElementById("searchConfirmOverlay").classList.remove("hidden");
 
+  // Collapse the mobile search icon back down now that a place was picked
+  // (no-op on desktop, where the search box is always shown inline).
   const wrap = document.getElementById("searchWrap");
   if (wrap) wrap.classList.remove("expanded");
 }
 
-
+// ---------------------------------------------------------------
+// Map setup
+// ---------------------------------------------------------------
 function initMap() {
   map = L.map("map", { zoomControl: true, attributionControl: true })
     .setView(TUNISIA_CENTER, DEFAULT_ZOOM);
@@ -250,6 +267,26 @@ function initMap() {
 
   reportLayer = L.layerGroup().addTo(map);
   sosLayer = L.layerGroup().addTo(map);
+  meLayer = L.layerGroup().addTo(map);
+
+  // "Locate me" button — implemented as a real Leaflet control so it
+  // automatically stacks under the zoom control and repositions itself
+  // correctly on both desktop and mobile, same as Leaflet's own controls.
+  const LocateControl = L.Control.extend({
+    options: { position: "topleft" },
+    onAdd: function () {
+      const container = L.DomUtil.create("div", "leaflet-bar leaflet-control locate-control");
+      const btn = L.DomUtil.create("a", "", container);
+      btn.href = "#";
+      btn.innerHTML = "📍";
+      btn.setAttribute("role", "button");
+      btn.title = t("locate_me_tooltip");
+      L.DomEvent.on(btn, "click", L.DomEvent.stop)
+        .on(btn, "click", () => handleLocateMe());
+      return container;
+    }
+  });
+  map.addControl(new LocateControl());
 
   map.on("click", (e) => {
     if (pendingReportType) {
@@ -261,6 +298,17 @@ function initMap() {
   });
 }
 
+async function handleLocateMe() {
+  try {
+    const loc = await getLocation();
+    map.flyTo([loc.lat, loc.lng], Math.max(map.getZoom(), 15), { duration: 0.8 });
+    meLayer.clearLayers();
+    L.marker([loc.lat, loc.lng], { icon: makeDivIcon("me", "") }).addTo(meLayer);
+  } catch (err) {
+    showToast(t("toast_location_unavailable"));
+  }
+}
+
 function makeDivIcon(className, label) {
   return L.divIcon({
     className: "",
@@ -269,7 +317,9 @@ function makeDivIcon(className, label) {
   });
 }
 
+// ---------------------------------------------------------------
 // Service switcher (power / water)
+// ---------------------------------------------------------------
 function updateServiceUI() {
   document.getElementById("fabReportOut").textContent = t(`fab_out_${activeService}`);
   document.getElementById("fabReportOn").textContent = t(`fab_on_${activeService}`);
@@ -298,7 +348,12 @@ function wireServiceSwitch() {
   });
 }
 
-
+// ---------------------------------------------------------------
+// Reports: submit
+// ---------------------------------------------------------------
+// Nour only tracks Tunisia — reports from far outside this box are rejected
+// so unrelated global testers/curious visitors can't pollute the map data.
+// Bounds are intentionally generous (covers the mainland plus Djerba/Kerkennah).
 const TUNISIA_BOUNDS = { minLat: 30.0, maxLat: 38.0, minLng: 7.0, maxLng: 12.0 };
 function isWithinTunisia(lat, lng) {
   return lat >= TUNISIA_BOUNDS.minLat && lat <= TUNISIA_BOUNDS.maxLat
@@ -317,7 +372,9 @@ async function submitReport(type, lat, lng, service) {
   const docId = `${uid}_${svc}_${key}`;
   const lastCellStorageKey = `nour_last_report_cell_${svc}`;
   try {
-
+    // If this device's last report for this service landed in a *different*
+    // nearby cell (GPS drift between visits, or reporting from phone vs PC),
+    // remove the old one so it doesn't keep showing a stale/contradicting status.
     const prevKey = localStorage.getItem(lastCellStorageKey);
     if (prevKey && prevKey !== key) {
       try { await deleteDoc(doc(db, "reports", `${uid}_${svc}_${prevKey}`)); } catch (e) { /* may not exist / may already be stale, ignore */ }
@@ -348,7 +405,9 @@ async function handleFabReport(type) {
 
 let lastReportDocs = [];
 
-
+// ---------------------------------------------------------------
+// Reports: live sync + clustering + render (map, table, feed)
+// ---------------------------------------------------------------
 function subscribeReports() {
   if (unsubscribeReports) unsubscribeReports();
   const cutoff = Timestamp.fromDate(new Date(Date.now() - STALE_HOURS * 3600 * 1000));
@@ -380,7 +439,8 @@ function aggregateAndRender(docs) {
   renderOutagesTable();
 }
 
-
+// Small deterministic offset so multiple reports at (near) the same spot
+// render as separate visible dots instead of stacking into one marker.
 function offsetForIndex(i, n) {
   if (n <= 1) return { dLat: 0, dLng: 0 };
   const radius = 0.0009; // ~90-100m ring around the true location
@@ -392,7 +452,8 @@ function renderMapMarkers() {
   reportLayer.clearLayers();
   let darkZones = 0;
 
-  
+  // group the raw (per-user) reports by service+cell so every individual
+  // report gets its own marker, even when several land in the same grid cell
   const byCell = {};
   for (const r of lastReportDocs) {
     if (!r.cell || !r.updatedAt) continue;
@@ -404,7 +465,10 @@ function renderMapMarkers() {
   for (const key in cellsData) {
     const c = cellsData[key];
     if (c.service !== activeService) continue;
-   
+    // A cell renders red "out" markers on the map as soon as it has ANY out
+    // report (see the marker-coloring logic below, which never nets out
+    // reports against on reports) — so the "zones dark" stat has to use the
+    // same rule, or it reads 0 while a red marker is clearly visible.
     const cellIsOut = c.out > 0;
     if (cellIsOut) darkZones++;
 
@@ -444,7 +508,8 @@ function renderMapMarkers() {
       marker.addTo(reportLayer);
     });
 
-   
+    // Fallback: if for some reason we have aggregate data but no matching
+    // raw docs (e.g. race on first load), still show one summary marker.
     if (reportsHere.length === 0) {
       const isWater = activeService === "water";
       const cls = cellIsOut ? (c.out >= 2 ? (isWater ? "water-out" : "out") : (isWater ? "water-out-weak" : "out-weak")) : "on";
@@ -505,7 +570,8 @@ function renderFeed(reportDocs) {
 function renderOutagesTable() {
   const body = document.getElementById("outagesTableBody");
 
-
+  // One row per individual report (not per grid cell), so the table
+  // matches what's now shown on the map — two nearby reports = two rows.
   const rows = lastReportDocs
     .filter((r) => r.cell && r.updatedAt)
     .map((r) => {
@@ -541,6 +607,7 @@ function renderOutagesTable() {
     </tr>
   `).join("");
 
+  // geocode once per cell, then fill in every row that shares that cell
   const seenCells = new Set();
   rows.forEach((r) => {
     if (seenCells.has(r.cell)) return;
@@ -575,8 +642,9 @@ function renderOutagesTable() {
   });
 }
 
-
+// ---------------------------------------------------------------
 // SOS: submit
+// ---------------------------------------------------------------
 function sosCooldownRemainingMs() {
   const until = parseInt(localStorage.getItem("nour_sos_cooldown_until") || "0", 10);
   return Math.max(0, until - Date.now());
@@ -648,7 +716,9 @@ async function markSafe(sosId) {
   }
 }
 
+// ---------------------------------------------------------------
 // SOS: live sync + render (map pins, list tab)
+// ---------------------------------------------------------------
 function subscribeSOS() {
   if (unsubscribeSOS) unsubscribeSOS();
   const q = query(collection(db, "sos"), where("active", "==", true));
@@ -726,6 +796,7 @@ function renderSOSList() {
   });
 }
 
+// Gently nudge someone whose own SOS has been active a while — once per session.
 function maybeNudgeCheckin() {
   if (checkinNudgedThisSession) return;
   const mine = sosData.find((s) => s.uid === uid);
@@ -737,7 +808,10 @@ function maybeNudgeCheckin() {
   }
 }
 
-
+// ---------------------------------------------------------------
+// SOS detail sheet: owner sees a list of private helper threads,
+// a helper goes straight into their own 1-on-1 thread with the owner.
+// ---------------------------------------------------------------
 function openSOSDetail(sosId) {
   const s = sosData.find((x) => x.id === sosId);
   if (!s) return;
@@ -795,7 +869,9 @@ async function flagSOS(sosId, alreadyFlagged) {
     showToast(t("toast_flag_already"));
     return;
   }
- 
+  // Flagging is what eventually hides someone's emergency from the map
+  // (see SOS_FLAG_HIDE_THRESHOLD), so require a deliberate confirmation
+  // rather than acting on a single accidental tap.
   const confirmed = window.confirm(t("sos_flag_confirm"));
   if (!confirmed) return;
   try {
@@ -831,7 +907,8 @@ function subscribeThreadsList(sosId) {
   }, (err) => console.error("threads list subscribe error", err));
 }
 
-
+// Opens the 1-on-1 private thread between the SOS owner and one helper.
+// helperUid identifies the thread; only that helper and the SOS owner can see it.
 function openThread(sosId, helperUid, cameFromList) {
   activeThreadHelperUid = helperUid;
   document.getElementById("threadsListWrap").classList.add("hidden");
@@ -904,7 +981,9 @@ async function sendThreadMessage(sosId, helperUid, isOwner) {
   }
 }
 
+// ---------------------------------------------------------------
 // Language switching
+// ---------------------------------------------------------------
 function wireLangSwitch() {
   const buttons = document.querySelectorAll(".lang-btn");
   function refreshActive() {
@@ -920,6 +999,8 @@ function wireLangSwitch() {
       renderFeed(lastReportDocs);
       renderOutagesTable();
       renderSOSList();
+      const locateBtn = document.querySelector(".locate-control a");
+      if (locateBtn) locateBtn.title = t("locate_me_tooltip");
       // Different languages have different label lengths, which can
       // change how many lines the topbar wraps to.
       requestAnimationFrame(positionSearchBar);
@@ -928,7 +1009,9 @@ function wireLangSwitch() {
   refreshActive();
 }
 
-
+// ---------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------
 function wireUI() {
   document.getElementById("fabReportOut").onclick = () => handleFabReport("out");
   document.getElementById("fabReportOn").onclick = () => handleFabReport("on");
@@ -1008,7 +1091,9 @@ function wireUI() {
   };
 }
 
-
+// ---------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------
 async function boot() {
   setLang(currentLang);
   applyStaticTranslations();
@@ -1035,6 +1120,66 @@ async function boot() {
   getLocation().catch(() => {});
 
   setInterval(subscribeReports, 5 * 60 * 1000);
+
+  setupPWA();
+}
+
+// ---------------------------------------------------------------
+// PWA install button + service worker
+// ---------------------------------------------------------------
+let deferredInstallPrompt = null;
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches
+      || window.navigator.standalone === true; // iOS Safari's own flag
+}
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+function setupPWA() {
+  const installBtn = document.getElementById("installBtn");
+
+  if (isStandalone()) return; // already installed — nothing to offer
+
+  // Chrome/Edge/Android fire this when the site qualifies as installable
+  // (valid manifest + active service worker + HTTPS). We stash the event
+  // and only trigger it when the person actually taps our own button,
+  // rather than letting the browser show its own generic mini-infobar.
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.classList.remove("hidden");
+  });
+
+  window.addEventListener("appinstalled", () => {
+    installBtn.classList.add("hidden");
+    deferredInstallPrompt = null;
+  });
+
+  // iOS Safari never fires beforeinstallprompt — there is no programmatic
+  // install API there. The best we can do is show the button and, on tap,
+  // explain the manual "Share → Add to Home Screen" steps.
+  if (isIOS()) {
+    installBtn.classList.remove("hidden");
+  }
+
+  installBtn.onclick = async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      if (outcome === "accepted") installBtn.classList.add("hidden");
+    } else if (isIOS()) {
+      showToast(t("toast_ios_install_hint"), 5000);
+    }
+  };
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      console.error("Service worker registration failed:", err);
+    });
+  }
 }
 
 boot();

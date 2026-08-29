@@ -111,6 +111,25 @@ html,body{
 }
 .lang-btn.active{ background: var(--sos); color: #0B1220; }
 
+.lang-install-group{ display:flex; align-items:center; gap:8px; }
+.install-btn{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background: var(--sos);
+  color: #0B1220;
+  border: none;
+  font-family: var(--font-body);
+  font-weight:600;
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor:pointer;
+  box-shadow: 0 4px 14px rgba(255,184,0,0.25);
+}
+.install-btn:hover{ filter: brightness(1.06); }
+.install-btn.hidden{ display:none; }
+
 /* ---------- Service switcher (power / water) ---------- */
 .service-switch{
   display:flex;
@@ -258,6 +277,18 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   color: var(--text) !important;
   border-color: var(--border) !important;
 }
+.locate-control a{
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  font-size: 15px !important;
+  display: block;
+  text-align: center;
+}
+.locate-control a:hover{ background: var(--surface-2) !important; }
 .leaflet-control-attribution{
   background: rgba(19,27,46,0.8) !important;
   color: var(--text-muted) !important;
@@ -297,6 +328,17 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   0%{ box-shadow: 0 0 0 0 rgba(255,75,75,0.65); }
   70%{ box-shadow: 0 0 0 18px rgba(255,75,75,0); }
   100%{ box-shadow: 0 0 0 0 rgba(255,75,75,0); }
+}
+.nour-dot.me{
+  background: #3B82F6;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 6px rgba(59,130,246,0.28);
+  animation: pulse-me 1.8s infinite;
+}
+@keyframes pulse-me{
+  0%{ box-shadow: 0 0 0 0 rgba(59,130,246,0.55); }
+  70%{ box-shadow: 0 0 0 14px rgba(59,130,246,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(59,130,246,0); }
 }
 
 .leaflet-popup-content-wrapper{
@@ -682,7 +724,11 @@ textarea{ height: 64px; }
   #menuToggle{ grid-area: menu; justify-self: end; align-self: start; }
   .stats{ grid-area: stats; justify-content: center; gap: 28px; }
   #serviceSwitch{ grid-area: service; justify-self: end; }
-  #langSwitch{ grid-area: lang; justify-self: start; }
+  .lang-install-group{ grid-area: lang; justify-self: start; }
+
+  /* Icon-only install button on narrow screens to avoid crowding the row. */
+  .install-label{ display:none; }
+  .install-btn{ padding: 8px 10px; }
 
   /* #searchWrap's top offset is set from JS (positionSearchBar()), which
      measures the topbar's real rendered height — it varies with font
@@ -700,7 +746,7 @@ textarea{ height: 64px; }
   }
   body.rtl #menuToggle{ justify-self: start; }
   body.rtl #serviceSwitch{ justify-self: start; }
-  body.rtl #langSwitch{ justify-self: end; }
+  body.rtl .lang-install-group{ justify-self: end; }
 
   /* Collapse the search bar to a small round icon so it doesn't sit on
      top of the map. Tapping it expands the full input + results. */

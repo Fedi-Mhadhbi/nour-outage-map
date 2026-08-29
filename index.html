@@ -11,9 +11,17 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="icon" type="image/png" href="nour.png">
 
 <link rel="stylesheet" href="style.css" />
+
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0B1220" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Nour" />
 </head>
 <body>
 
@@ -45,10 +53,17 @@
       <button class="service-btn" data-service="water" data-i18n="service_water">💧 Water</button>
     </div>
 
-    <div class="lang-switch" id="langSwitch">
-      <button class="lang-btn" data-lang="en">EN</button>
-      <button class="lang-btn" data-lang="fr">FR</button>
-      <button class="lang-btn" data-lang="ar">ع</button>
+    <div class="lang-install-group">
+      <div class="lang-switch" id="langSwitch">
+        <button class="lang-btn" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="fr">FR</button>
+        <button class="lang-btn" data-lang="ar">ع</button>
+      </div>
+
+      <button id="installBtn" class="install-btn hidden">
+        <span class="install-icon">📲</span>
+        <span class="install-label" data-i18n="install_button_short">Install</span>
+      </button>
     </div>
 
     <button id="menuToggle" class="icon-btn" aria-label="Open panel">☰</button>
