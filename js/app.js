@@ -430,6 +430,14 @@ let lastReportDocs = [];
 // ---------------------------------------------------------------
 function subscribeReports() {
   if (unsubscribeReports) unsubscribeReports();
+  // This cutoff is captured once and never re-queried on a timer.
+  // Re-attaching a fresh listener periodically was the actual cause of
+  // the project blowing past its free daily read quota: Firestore
+  // re-charges a full read for every matching document on every new
+  // attach — and that cost was being paid by every open tab, every 5
+  // minutes. True staleness is enforced client-side instead, in
+  // aggregateAndRender, via a cheap re-render timer that costs zero
+  // additional Firestore reads (see boot()).
   const cutoff = Timestamp.fromDate(new Date(Date.now() - STALE_HOURS * 3600 * 1000));
   const q = query(collection(db, "reports"), where("updatedAt", ">=", cutoff));
   unsubscribeReports = onSnapshot(q, (snap_) => {
@@ -441,21 +449,28 @@ function subscribeReports() {
 
 function aggregateAndRender(docs) {
   lastReportDocs = docs;
+  // Enforce the real staleness window here, at render time, using the
+  // CURRENT wall-clock time — not by relying on the Firestore query's
+  // cutoff, which is fixed at whatever moment the listener was attached
+  // and never moves forward on its own.
+  const cutoffMillis = Date.now() - STALE_HOURS * 3600 * 1000;
+  const freshDocs = docs.filter((r) => r.updatedAt && r.updatedAt.toMillis && r.updatedAt.toMillis() >= cutoffMillis);
+
   const cells = {};
-  for (const r of docs) {
-    if (!r.cell || !r.updatedAt) continue;
+  for (const r of freshDocs) {
+    if (!r.cell) continue;
     const svc = r.service || "power";
     const key = `${svc}_${r.cell}`;
     if (!cells[key]) cells[key] = { lat: r.lat, lng: r.lng, out: 0, on: 0, lastUpdate: r.updatedAt, service: svc, cell: r.cell };
     if (r.type === "out") cells[key].out++;
     if (r.type === "on") cells[key].on++;
-    if (r.updatedAt.toMillis && r.updatedAt.toMillis() > cells[key].lastUpdate.toMillis()) {
+    if (r.updatedAt.toMillis() > cells[key].lastUpdate.toMillis()) {
       cells[key].lastUpdate = r.updatedAt;
     }
   }
   cellsData = cells;
   renderMapMarkers();
-  renderFeed(docs);
+  renderFeed(freshDocs);
   renderOutagesTable();
 }
 
@@ -1258,7 +1273,11 @@ async function boot() {
 
   getLocation().catch(() => {});
 
-  setInterval(subscribeReports, 5 * 60 * 1000);
+  // Re-render (not re-query) periodically so reports that cross the
+  // staleness threshold fade out of the map/table on their own. This
+  // costs ZERO additional Firestore reads — it just re-processes the
+  // already-cached lastReportDocs against the current wall-clock time.
+  setInterval(() => aggregateAndRender(lastReportDocs), 60 * 1000);
 
   setupPWA();
 }
