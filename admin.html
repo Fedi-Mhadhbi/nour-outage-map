@@ -6,7 +6,8 @@
 <title>Nour — Admin</title>
 <meta name="robots" content="noindex, nofollow" />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -28,37 +29,86 @@
   <div id="adminDashboard" class="admin-dashboard hidden">
     <header class="admin-header">
       <h1 class="admin-title">Nour — Admin</h1>
-      <button id="adminLogoutBtn" class="btn btn-ghost">Sign out</button>
+      <div class="admin-header-actions">
+        <span id="adminLastRefresh" class="admin-refresh-time"></span>
+        <button id="adminRefreshBtn" class="btn btn-ghost">↻ Refresh</button>
+        <button id="adminLogoutBtn" class="btn btn-ghost">Sign out</button>
+      </div>
     </header>
 
-    <section class="admin-stat-grid" id="adminStats">
-      <div class="admin-stat-card">
-        <span class="admin-stat-value" id="statActiveReports">–</span>
-        <span class="admin-stat-label">active reports (last 12h)</span>
+    <nav class="admin-tabs">
+      <button class="admin-tab active" data-tab="overview">Overview</button>
+      <button class="admin-tab" data-tab="reports">Reports</button>
+      <button class="admin-tab" data-tab="sos">SOS</button>
+    </nav>
+
+    <!-- Overview tab -->
+    <section class="admin-tab-panel active" id="tabOverview">
+      <div class="admin-stat-grid" id="adminStats">
+        <div class="admin-stat-card">
+          <span class="admin-stat-value" id="statActiveReports">–</span>
+          <span class="admin-stat-label">active reports (last 12h)</span>
+        </div>
+        <div class="admin-stat-card">
+          <span class="admin-stat-value" id="statActiveSOS">–</span>
+          <span class="admin-stat-label">active SOS</span>
+        </div>
+        <div class="admin-stat-card admin-stat-warn">
+          <span class="admin-stat-value" id="statFlagged">–</span>
+          <span class="admin-stat-label">flagged SOS</span>
+        </div>
+        <div class="admin-stat-card admin-stat-caution">
+          <span class="admin-stat-value" id="statStaleSOS">–</span>
+          <span class="admin-stat-label">SOS older than 6h</span>
+        </div>
       </div>
-      <div class="admin-stat-card">
-        <span class="admin-stat-value" id="statActiveSOS">–</span>
-        <span class="admin-stat-label">active SOS</span>
-      </div>
-      <div class="admin-stat-card admin-stat-warn">
-        <span class="admin-stat-value" id="statFlagged">–</span>
-        <span class="admin-stat-label">flagged SOS</span>
+
+      <div class="admin-chart-grid">
+        <div class="admin-chart-card">
+          <h3>Power vs Water</h3>
+          <p class="admin-hint">Share of active reports by service</p>
+          <canvas id="serviceChart" height="220"></canvas>
+        </div>
+        <div class="admin-chart-card">
+          <h3>Out vs Back on</h3>
+          <p class="admin-hint">Current status breakdown per service</p>
+          <canvas id="statusChart" height="220"></canvas>
+        </div>
       </div>
     </section>
 
-    <section class="admin-section">
-      <h2>🚩 Flagged SOS</h2>
-      <p class="admin-hint">SOS alerts the community has reported as possibly fake. Review and delete if needed — this is permanent.</p>
-      <div id="flaggedList" class="admin-list">
-        <p class="admin-empty">Loading…</p>
+    <!-- Reports tab -->
+    <section class="admin-tab-panel" id="tabReports">
+      <div class="admin-toolbar">
+        <div class="filter-row" id="reportsServiceFilter">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="power">⚡ Power</button>
+          <button class="filter-chip" data-filter="water">💧 Water</button>
+        </div>
+        <input id="reportsSearch" type="text" class="admin-search" placeholder="Search by area name…" />
       </div>
-    </section>
-
-    <section class="admin-section">
-      <h2>📋 Recent reports</h2>
-      <p class="admin-hint">Last 50 outage reports, newest first. Deleting here removes it for everyone, same as a user removing their own.</p>
+      <p class="admin-hint">Last 50 outage reports, newest first. Area names load in shortly (rate-limited lookup). Deleting removes it for everyone, same as a user removing their own.</p>
       <div id="reportsList" class="admin-list">
         <p class="admin-empty">Loading…</p>
+      </div>
+    </section>
+
+    <!-- SOS tab -->
+    <section class="admin-tab-panel" id="tabSOS">
+      <div class="admin-subsection">
+        <h2>🚩 Flagged as possibly fake</h2>
+        <p class="admin-hint">Reported by the community. Review and delete if needed — this is permanent.</p>
+        <div id="flaggedList" class="admin-list">
+          <p class="admin-empty">Loading…</p>
+        </div>
+      </div>
+
+      <div class="admin-subsection">
+        <h2>🆘 All active SOS</h2>
+        <p class="admin-hint">Every SOS currently marked active — including ones the owner may have forgotten to clear. SOS alerts don't expire automatically yet, so old ones can linger here until someone (the owner, or you) removes them.</p>
+        <div id="activeSosList" class="admin-list">
+          <p class="admin-empty">Loading…</p>
+        </div>
       </div>
     </section>
   </div>
