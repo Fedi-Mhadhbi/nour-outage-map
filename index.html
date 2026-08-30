@@ -134,20 +134,9 @@
         <button class="filter-chip" data-filter="out" data-i18n="filter_out">Out</button>
         <button class="filter-chip" data-filter="on" data-i18n="filter_on">Back on</button>
       </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th data-i18n="table_area">Area</th>
-            <th data-i18n="table_service">Service</th>
-            <th data-i18n="table_status">Status</th>
-            <th data-i18n="table_updated">Updated</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="outagesTableBody">
-          <tr><td colspan="5" class="table-empty" data-i18n="table_empty">No reports yet.</td></tr>
-        </tbody>
-      </table>
+      <ul id="outagesTableBody" class="outage-cards">
+        <li class="table-empty" data-i18n="table_empty">No reports yet.</li>
+      </ul>
     </div>
 
     <!-- SOS list tab -->

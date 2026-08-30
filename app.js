@@ -608,28 +608,30 @@ function renderOutagesTable() {
     .sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
 
   if (rows.length === 0) {
-    body.innerHTML = `<tr><td colspan="5" class="table-empty">${lastReportDocs.length === 0 ? t("table_empty") : t("table_filtered_empty")}</td></tr>`;
+    body.innerHTML = `<li class="table-empty">${lastReportDocs.length === 0 ? t("table_empty") : t("table_filtered_empty")}</li>`;
     return;
   }
 
   body.innerHTML = rows.map((r) => `
-    <tr data-lat="${r.lat}" data-lng="${r.lng}">
-      <td class="area-name" data-cell="${r.cell}" data-row="${r.id}">${r.lat.toFixed(2)}, ${r.lng.toFixed(2)}</td>
-      <td>${r.service === "water" ? "💧" : "⚡"}</td>
-      <td>
-        <span class="status-cell">
-          <span class="dot ${r.status === "out" ? (r.confirmed ? (r.service === "water" ? "dot-water-out" : "dot-out") : (r.service === "water" ? "dot-water-out-weak" : "dot-out-weak")) : "dot-on"}"></span>
-          ${r.status === "out" ? t(r.service === "water" ? "status_no_water" : "status_no_power") : t(r.service === "water" ? "status_water_on" : "status_power_on")}
-        </span>
-      </td>
-      <td>${timeAgo(r.updatedAt)}</td>
-      <td>
-        <div class="row-actions">
-          <button class="row-btn" data-goto-lat="${r.lat}" data-goto-lng="${r.lng}" data-goto-service="${r.service}">${t("table_view")}</button>
-          <button class="row-btn" data-history-cell="${r.cell}" data-history-service="${r.service}" data-history-lat="${r.lat}" data-history-lng="${r.lng}">${t("table_history")}</button>
+    <li class="outage-card" data-lat="${r.lat}" data-lng="${r.lng}">
+      <div class="outage-card-main">
+        <div class="outage-card-top">
+          <span class="outage-card-area area-name" data-cell="${r.cell}" data-row="${r.id}">${r.lat.toFixed(2)}, ${r.lng.toFixed(2)}</span>
+          <span class="outage-card-svc">${r.service === "water" ? "💧" : "⚡"}</span>
         </div>
-      </td>
-    </tr>
+        <div class="outage-card-bottom">
+          <span class="status-cell">
+            <span class="dot ${r.status === "out" ? (r.confirmed ? (r.service === "water" ? "dot-water-out" : "dot-out") : (r.service === "water" ? "dot-water-out-weak" : "dot-out-weak")) : "dot-on"}"></span>
+            ${r.status === "out" ? t(r.service === "water" ? "status_no_water" : "status_no_power") : t(r.service === "water" ? "status_water_on" : "status_power_on")}
+          </span>
+          <span class="outage-card-time">${timeAgo(r.updatedAt)}</span>
+        </div>
+      </div>
+      <div class="row-actions">
+        <button class="row-btn" data-goto-lat="${r.lat}" data-goto-lng="${r.lng}" data-goto-service="${r.service}">${t("table_view")}</button>
+        <button class="row-btn" data-history-cell="${r.cell}" data-history-service="${r.service}" data-history-lat="${r.lat}" data-history-lng="${r.lng}">${t("table_history")}</button>
+      </div>
+    </li>
   `).join("");
 
   // geocode once per cell, then fill in every row that shares that cell

@@ -171,7 +171,8 @@ body.rtl #panel.panel-hidden{ transform: translateX(-105%); }
 body.rtl .legend-row{ flex-direction: row-reverse; justify-content: flex-end; }
 body.rtl .status-cell{ flex-direction: row-reverse; }
 body.rtl .sos-item-top{ flex-direction: row-reverse; }
-body.rtl .data-table th, body.rtl .data-table td{ text-align: right; }
+body.rtl .outage-card{ flex-direction: row-reverse; }
+body.rtl .outage-card-top, body.rtl .outage-card-bottom{ flex-direction: row-reverse; }
 body.rtl .comment-input-row{ flex-direction: row-reverse; }
 body.rtl .search-box{ flex-direction: row-reverse; }
 body.rtl .sheet-header-row{ flex-direction: row-reverse; }
@@ -522,38 +523,45 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
 }
 .filter-chip.active{ background: var(--out); color:#fff; border-color: var(--out); font-weight:600; }
 
-.data-table{ width:100%; border-collapse: collapse; font-size: 12.5px; }
-.data-table th{
-  text-align:left;
-  color: var(--text-muted);
-  font-weight:600;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 6px 4px;
-  border-bottom: 1px solid var(--border);
-}
-.data-table td{
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-.data-table .status-cell{ display:flex; align-items:center; gap:6px; }
-.row-actions{ display:flex; flex-direction:column; gap:6px; min-width: 100px; }
-.data-table .row-btn{
+/* Outages list — one card per report. Replaces the old data-table: a
+   5-column table never fit the panel's width, so the action buttons
+   ("View" / "History") ended up scrolled off-screen and undiscoverable.
+   Cards stack everything vertically instead, so both buttons are always
+   fully visible without any horizontal scrolling, on every screen size. */
+.outage-cards{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.outage-card{
   background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.outage-card-main{ flex: 1 1 160px; min-width: 0; }
+.outage-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+.outage-card-area{ font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.outage-card-svc{ font-size:13px; flex-shrink:0; }
+.outage-card-bottom{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.outage-card-time{ color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); flex-shrink:0; }
+.outage-cards .status-cell{ display:flex; align-items:center; gap:6px; font-size: 12.5px; }
+.row-actions{ display:flex; flex-direction:row; gap:8px; flex-shrink:0; width: 100%; max-width: 220px; }
+.row-btn{
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 9px 10px;
   font-size: 12.5px;
   font-weight: 500;
   cursor:pointer;
-  width: 100%;
+  flex: 1;
   text-align: center;
 }
-.data-table .row-btn:hover{ background: var(--surface); border-color: var(--sos); }
-.table-empty{ color: var(--text-muted); font-style: italic; text-align:center; padding: 18px 0 !important; }
+.row-btn:hover{ background: var(--surface-2); border-color: var(--sos); }
+.table-empty{ list-style:none; color: var(--text-muted); font-style: italic; text-align:center; padding: 18px 0; }
 
 /* ---------- SOS list ---------- */
 .sos-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
@@ -731,10 +739,12 @@ textarea{ height: 64px; }
 
 /* ---------- Responsive ---------- */
 
-/* Let the outages table scroll horizontally on narrow panels instead of
-   squishing its columns unreadably. */
-#tabOutages{ overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.data-table{ min-width: 460px; }
+@media (max-width: 480px){
+  /* On very narrow phones, stack View/History full-width underneath the
+     status row instead of squeezing them side-by-side next to it. */
+  .outage-card{ flex-direction: column; align-items: stretch; }
+  .row-actions{ max-width: none; }
+}
 
 @media (max-width: 720px){
   /* The default topbar is a single non-wrapping flex row (brand + stats +
