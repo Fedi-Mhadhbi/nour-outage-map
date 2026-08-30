@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nour — Admin</title>
+<meta name="robots" content="noindex, nofollow" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<div id="adminApp">
+
+  <!-- Login screen -->
+  <div id="adminLogin" class="admin-login-wrap">
+    <div class="admin-login-card">
+      <h1 class="admin-title">Nour — Admin</h1>
+      <p class="admin-sub">Sign in with your admin account.</p>
+      <input id="adminEmail" type="email" placeholder="Email" autocomplete="username" />
+      <input id="adminPassword" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="adminLoginBtn" class="btn btn-danger" style="width:100%;">Sign in</button>
+      <p id="adminLoginError" class="admin-error hidden"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard (hidden until authenticated as the admin uid) -->
+  <div id="adminDashboard" class="admin-dashboard hidden">
+    <header class="admin-header">
+      <h1 class="admin-title">Nour — Admin</h1>
+      <button id="adminLogoutBtn" class="btn btn-ghost">Sign out</button>
+    </header>
+
+    <section class="admin-stat-grid" id="adminStats">
+      <div class="admin-stat-card">
+        <span class="admin-stat-value" id="statActiveReports">–</span>
+        <span class="admin-stat-label">active reports (last 12h)</span>
+      </div>
+      <div class="admin-stat-card">
+        <span class="admin-stat-value" id="statActiveSOS">–</span>
+        <span class="admin-stat-label">active SOS</span>
+      </div>
+      <div class="admin-stat-card admin-stat-warn">
+        <span class="admin-stat-value" id="statFlagged">–</span>
+        <span class="admin-stat-label">flagged SOS</span>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <h2>🚩 Flagged SOS</h2>
+      <p class="admin-hint">SOS alerts the community has reported as possibly fake. Review and delete if needed — this is permanent.</p>
+      <div id="flaggedList" class="admin-list">
+        <p class="admin-empty">Loading…</p>
+      </div>
+    </section>
+
+    <section class="admin-section">
+      <h2>📋 Recent reports</h2>
+      <p class="admin-hint">Last 50 outage reports, newest first. Deleting here removes it for everyone, same as a user removing their own.</p>
+      <div id="reportsList" class="admin-list">
+        <p class="admin-empty">Loading…</p>
+      </div>
+    </section>
+  </div>
+
+</div>
+
+<script type="module" src="admin-firebase-config.js"></script>
+<script type="module" src="admin.js"></script>
+
+</body>
+</html>
