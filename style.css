@@ -171,7 +171,6 @@ body.rtl #panel.panel-hidden{ transform: translateX(-105%); }
 body.rtl .legend-row{ flex-direction: row-reverse; justify-content: flex-end; }
 body.rtl .status-cell{ flex-direction: row-reverse; }
 body.rtl .sos-item-top{ flex-direction: row-reverse; }
-body.rtl .outage-card{ flex-direction: row-reverse; }
 body.rtl .outage-card-top, body.rtl .outage-card-bottom{ flex-direction: row-reverse; }
 body.rtl .comment-input-row{ flex-direction: row-reverse; }
 body.rtl .search-box{ flex-direction: row-reverse; }
@@ -535,19 +534,16 @@ body.rtl .sos-item-dist{ font-family: 'Noto Sans Arabic', var(--font-mono); }
   border-radius: 10px;
   padding: 11px 12px;
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
-.outage-card-main{ flex: 1 1 160px; min-width: 0; }
-.outage-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+.outage-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .outage-card-area{ font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .outage-card-svc{ font-size:13px; flex-shrink:0; }
 .outage-card-bottom{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .outage-card-time{ color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); flex-shrink:0; }
 .outage-cards .status-cell{ display:flex; align-items:center; gap:6px; font-size: 12.5px; }
-.row-actions{ display:flex; flex-direction:row; gap:8px; flex-shrink:0; width: 100%; max-width: 220px; }
+.row-actions{ display:flex; flex-direction:row; gap:8px; }
 .row-btn{
   background: var(--surface);
   border: 1px solid var(--border);
@@ -738,13 +734,6 @@ textarea{ height: 64px; }
 .toast.hidden{ display:none; }
 
 /* ---------- Responsive ---------- */
-
-@media (max-width: 480px){
-  /* On very narrow phones, stack View/History full-width underneath the
-     status row instead of squeezing them side-by-side next to it. */
-  .outage-card{ flex-direction: column; align-items: stretch; }
-  .row-actions{ max-width: none; }
-}
 
 @media (max-width: 720px){
   /* The default topbar is a single non-wrapping flex row (brand + stats +
