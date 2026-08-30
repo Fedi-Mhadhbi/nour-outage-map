@@ -3,14 +3,14 @@
 // (Firestore, search, geocoding) always goes over the network as normal —
 // this only ever caches the static files that make up the app itself.
 
-const CACHE_NAME = "nour-shell-v1";
+const CACHE_NAME = "nour-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
-  "./i18n.js",
-  "./firebase-config.js",
+  "./css/style.css",
+  "./js/app.js",
+  "./js/i18n.js",
+  "./js/firebase-config.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
